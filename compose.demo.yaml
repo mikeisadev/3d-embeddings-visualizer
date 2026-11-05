@@ -1,0 +1,44 @@
+# Demo database with SYNTHETIC data (no L17 needed):
+#   docker compose -f docker-compose.yml -f compose.demo.yaml up --build -d
+# The data lives in memory and is regenerated at every start.
+services:
+  demo-db:
+    image: pgvector/pgvector:0.8.7-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chatbot
+      POSTGRES_USER: chatbot
+      # Same CLASSROOM-ONLY credentials as the L17 database; synthetic data, not published.
+      POSTGRES_PASSWORD: chatbot123
+    volumes:
+      - ./demo-db/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+      - /var/run/postgresql
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # The official entrypoint prepares the data directory, then drops to the postgres user.
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chatbot -d chatbot -h 127.0.0.1 && psql -U chatbot -d chatbot -h 127.0.0.1 -tAc 'SELECT 1 FROM public.vector_store LIMIT 1' | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  viz-backend:
+    environment:
+      VIZ_DB_URL: jdbc:postgresql://demo-db:5432/chatbot
+      VIZ_DB_USER: chatbot
+      VIZ_DB_PASSWORD: chatbot123
+    depends_on:
+      demo-db:
+        condition: service_healthy

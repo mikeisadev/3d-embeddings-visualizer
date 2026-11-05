@@ -1,0 +1,138 @@
+.scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--scene-bg);
+  color: var(--scene-text);
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgb(15 23 32 / 75%);
+}
+
+.badge {
+  position: absolute;
+  bottom: 30px;
+  left: 12px;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgb(15 23 32 / 75%);
+  font-size: 0.85em;
+}
+
+.help {
+  position: absolute;
+  bottom: 8px;
+  left: 12px;
+  margin: 0;
+  color: #9fb0c0;
+  font-size: 0.78em;
+}
+
+/* Top-left messages: points reloading, UMAP in progress. */
+.status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.pill {
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgb(15 23 32 / 75%);
+  font-size: 0.85em;
+}
+
+.pillButton {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  color: #8cc4ff;
+  text-decoration: underline;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgb(15 23 32 / 70%);
+  color: var(--scene-text);
+  text-align: center;
+}
+
+.overlay > div {
+  max-width: 520px;
+  color: var(--color-text);
+  text-align: left;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 320px;
+  padding: 8px 10px;
+  border: 1px solid #3b4a5a;
+  border-radius: 6px;
+  background: rgb(15 23 32 / 94%);
+  color: var(--scene-text);
+  font-size: 0.88em;
+  pointer-events: none;
+}
+
+.tooltipPage {
+  color: #9fb0c0;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+  background: var(--scene-bg);
+  color: var(--scene-text);
+}

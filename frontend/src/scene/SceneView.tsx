@@ -1,0 +1,402 @@
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
+import { ErrorMessage } from '../components/ErrorMessage';
+import ui from '../components/ui.module.css';
+import { useDataset, useNeighbors, usePointCloudView, usePoints } from '../hooks/queries';
+import { colorMappingOf, useColorMapping, usePointStates } from '../hooks/usePointStates';
+import { it } from '../i18n/it';
+import { downloadUrl, screenshotFileName } from '../lib/download';
+import { useUiStore } from '../state/uiStore';
+import { progressShare } from '../umap/progress';
+import { type PointAppearance, type QueryMarker, SceneController } from './SceneController';
+import { computeEmphasis, fileGuides, focusSet, placeQuestion } from './sceneModel';
+import styles from './SceneView.module.css';
+import { isWebGl2Available } from './webgl';
+
+interface Hover {
+  readonly index: number;
+  readonly x: number;
+  readonly y: number;
+}
+
+/** The 3D view: a React shell around {@link SceneController}, which owns the three.js objects. */
+export default function SceneView() {
+  const [webglAvailable] = useState(isWebGl2Available);
+  const [generation, setGeneration] = useState(0);
+
+  if (!webglAvailable) {
+    return (
+      <div className={styles.message} role="alert">
+        <p>{it.scene.noWebgl}</p>
+        <p>{it.scene.noWebglHint}</p>
+      </div>
+    );
+  }
+  return (
+    <SceneCanvas
+      key={generation}
+      onReload={() => {
+        setGeneration(generation + 1);
+      }}
+    />
+  );
+}
+
+function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const controllerRef = useRef<SceneController | null>(null);
+  const [hover, setHover] = useState<Hover | null>(null);
+  const [contextLost, setContextLost] = useState(false);
+
+  const points = usePoints();
+  const dataset = useDataset().data;
+  const view = usePointCloudView();
+  const mapping = useColorMapping();
+  const states = usePointStates();
+  const selectedId = useUiStore((state) => state.selectedId);
+  const compareA = useUiStore((state) => state.compareA);
+  const compareB = useUiStore((state) => state.compareB);
+  const pointSize = useUiStore((state) => state.pointSize);
+  const showGrid = useUiStore((state) => state.showGrid);
+  const setShowGrid = useUiStore((state) => state.setShowGrid);
+  const showPaths = useUiStore((state) => state.showPaths);
+  const setShowPaths = useUiStore((state) => state.setShowPaths);
+  const showCentroids = useUiStore((state) => state.showCentroids);
+  const setShowCentroids = useUiStore((state) => state.setShowCentroids);
+  const focusRequest = useUiStore((state) => state.focusRequest);
+  const select = useUiStore((state) => state.select);
+  const ragOverlay = useUiStore((state) => state.ragOverlay);
+  const projectionMethod = useUiStore((state) => state.projectionMethod);
+  const setProjectionMethod = useUiStore((state) => state.setProjectionMethod);
+  const umap = useUiStore((state) => state.umap);
+  const presentation = useUiStore((state) => state.presentation);
+  const neighbors = useNeighbors(selectedId);
+
+  const method = view?.method ?? 'pca';
+  const badge = method === 'umap' ? it.scene.projectionBadgeUmap : it.scene.projectionBadge;
+  const umapRunning =
+    projectionMethod === 'umap' && (umap.status === 'loading' || umap.status === 'running');
+
+  const indexOf = (id: string | null) =>
+    id === null || view === null ? null : (view.indexById.get(id) ?? null);
+  const selectedIndex = indexOf(selectedId);
+  const neighborData = neighbors.data;
+  const neighborIndices = useMemo(() => {
+    if (view === null || neighborData?.id !== selectedId) {
+      return [];
+    }
+    return neighborData.neighbors
+      .map((neighbor) => view.indexById.get(neighbor.id))
+      .filter((index): index is number => index !== undefined);
+  }, [neighborData, selectedId, view]);
+
+  /** The last RAG search, only when it belongs to the points on screen. */
+  const rag = useMemo(() => {
+    const placement = placeQuestion(
+      ragOverlay,
+      view === null
+        ? null
+        : {
+            method: view.method,
+            datasetVersion: view.data.datasetVersion,
+            normalized: view.data.projection.normalized,
+            indexById: view.indexById,
+            transform: view.transform,
+            positions: view.positions,
+          },
+    );
+    if (placement === null) {
+      return null;
+    }
+    const marker: QueryMarker = {
+      position: placement.position,
+      label: placement.approximate ? it.rag.approximateMarker : it.rag.questionMarker,
+      links: placement.links,
+    };
+    return { marker, indices: placement.links.map((link) => link.index) };
+  }, [ragOverlay, view]);
+
+  const appearance = useMemo<PointAppearance | null>(() => {
+    if (mapping === null || states === null) {
+      return null;
+    }
+    const focus = focusSet({
+      selected: selectedIndex,
+      neighbors: neighborIndices,
+      ragResults: rag?.indices ?? null,
+      textMatches: states.textMatches,
+    });
+    return {
+      colors: mapping.colors,
+      visible: states.visible,
+      emphasized: computeEmphasis(states.inFilter, focus),
+      pointSize,
+    };
+  }, [mapping, states, selectedIndex, neighborIndices, rag, pointSize]);
+
+  const guides = useMemo(() => {
+    if (view === null || states === null || (!showPaths && !showCentroids)) {
+      return [];
+    }
+    const legend = colorMappingOf(view.data, 'field:file').legend;
+    const fileColors = new Map(
+      legend.kind === 'categorical'
+        ? legend.categories.map((category) => [category.id, category.color])
+        : [],
+    );
+    return fileGuides(
+      view.data.points.map((point) => point.file),
+      states.visible,
+      view.positions,
+      (file) => fileColors.get(file) ?? '#9fb0c0',
+    );
+  }, [view, states, showPaths, showCentroids]);
+
+  const onSelectPoint = useEffectEvent((index: number | null) => {
+    select(index === null || view === null ? null : (view.data.points[index]?.id ?? null));
+  });
+  const onHoverPoint = useEffectEvent((index: number | null, clientX: number, clientY: number) => {
+    const box = containerRef.current?.getBoundingClientRect();
+    setHover(
+      index === null || box === undefined
+        ? null
+        : { index, x: clientX - box.left, y: clientY - box.top },
+    );
+  });
+  const onFocusRequest = useEffectEvent((id: string) => {
+    const index = view?.indexById.get(id);
+    if (index !== undefined) {
+      controllerRef.current?.focusPoint(index);
+    }
+  });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (container === null) {
+      return;
+    }
+    const controller = new SceneController(container, {
+      onHover: (index, x, y) => {
+        onHoverPoint(index, x, y);
+      },
+      onSelect: (index) => {
+        onSelectPoint(index);
+      },
+      onContextLost: () => {
+        setContextLost(true);
+      },
+    });
+    controllerRef.current = controller;
+    return () => {
+      controller.dispose();
+      controllerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (view !== null) {
+      controllerRef.current?.setPoints(view.positions);
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (appearance !== null) {
+      controllerRef.current?.setAppearance(appearance);
+    }
+  }, [appearance]);
+
+  useEffect(() => {
+    controllerRef.current?.setSelection(selectedIndex, neighborIndices);
+  }, [selectedIndex, neighborIndices]);
+
+  const compareIndexA = indexOf(compareA);
+  const compareIndexB = indexOf(compareB);
+  useEffect(() => {
+    controllerRef.current?.setComparison(compareIndexA, compareIndexB, [
+      it.compare.slotA,
+      it.compare.slotB,
+    ]);
+  }, [compareIndexA, compareIndexB]);
+
+  useEffect(() => {
+    controllerRef.current?.setQueryMarker(rag?.marker ?? null);
+  }, [rag]);
+
+  useEffect(() => {
+    controllerRef.current?.setGuides(guides, { paths: showPaths, centroids: showCentroids });
+  }, [guides, showPaths, showCentroids]);
+
+  // Frame each new question once; reloading the points keeps the camera where it is.
+  const focusQuestion = useEffectEvent(() => {
+    if (rag !== null) {
+      controllerRef.current?.focusPosition(rag.marker.position);
+    }
+  });
+  useEffect(() => {
+    if (ragOverlay !== null) {
+      focusQuestion();
+    }
+  }, [ragOverlay]);
+
+  const ratios = view?.data.projection.explainedVarianceRatio;
+  const axisLabels = useMemo(
+    () =>
+      [0, 1, 2].map((axis) =>
+        method === 'umap' ? it.scene.axisUmap(axis) : it.scene.axis(axis, ratios?.[axis] ?? null),
+      ) as [string, string, string],
+    [method, ratios],
+  );
+  useEffect(() => {
+    controllerRef.current?.setAxisLabels(axisLabels);
+  }, [axisLabels]);
+
+  useEffect(() => {
+    controllerRef.current?.setGridVisible(showGrid);
+  }, [showGrid]);
+
+  useEffect(() => {
+    controllerRef.current?.setPresentation(presentation);
+  }, [presentation]);
+
+  useEffect(() => {
+    if (focusRequest !== null) {
+      onFocusRequest(focusRequest.id);
+    }
+  }, [focusRequest]);
+
+  const saveImage = () => {
+    const controller = controllerRef.current;
+    if (controller === null) {
+      return;
+    }
+    const table = dataset === undefined ? 'dataset' : `${dataset.schema}.${dataset.table}`;
+    const caption = [
+      dataset === undefined
+        ? badge
+        : `${it.header.dataset(table, dataset.rowsWithEmbedding, dataset.dimensions)} · ${badge}`,
+    ];
+    downloadUrl(controller.screenshot(caption), screenshotFileName(table, method, new Date()));
+  };
+
+  const hovered = hover === null ? undefined : view?.data.points[hover.index];
+
+  return (
+    <div className={styles.scene}>
+      <div ref={containerRef} className={styles.canvas} />
+
+      <div className={styles.toolbar} role="toolbar" aria-label={it.scene.toolbar}>
+        <button
+          type="button"
+          className={ui.button}
+          onClick={() => {
+            controllerRef.current?.resetView();
+          }}
+        >
+          {it.scene.resetView}
+        </button>
+        <SceneToggle label={it.scene.grid} checked={showGrid} onChange={setShowGrid} />
+        <SceneToggle
+          label={it.scene.paths}
+          title={it.scene.pathsHint}
+          checked={showPaths}
+          onChange={setShowPaths}
+        />
+        <SceneToggle
+          label={it.scene.centroids}
+          title={it.scene.centroidsHint}
+          checked={showCentroids}
+          onChange={setShowCentroids}
+        />
+        <button
+          type="button"
+          className={ui.button}
+          title={it.scene.screenshotHint}
+          disabled={view === null}
+          onClick={saveImage}
+        >
+          {it.scene.screenshot}
+        </button>
+      </div>
+
+      <div className={styles.status}>
+        {points.isPlaceholderData && <p className={styles.pill}>{it.scene.reloadingPoints}</p>}
+        {umapRunning && (
+          <p className={styles.pill} role="status">
+            {it.scene.umapRunning(progressShare(umap))}{' '}
+            <button
+              type="button"
+              className={styles.pillButton}
+              onClick={() => {
+                setProjectionMethod('pca');
+              }}
+            >
+              {it.projection.umapCancel}
+            </button>
+          </p>
+        )}
+      </div>
+
+      <p className={styles.badge}>{badge}</p>
+      <p className={styles.help}>{it.scene.help}</p>
+
+      {points.isPending && points.fetchStatus !== 'idle' && (
+        <div className={styles.overlay} aria-busy="true">
+          {it.scene.loadingPoints}
+        </div>
+      )}
+      {points.isError && (
+        <div className={styles.overlay}>
+          <ErrorMessage
+            error={points.error}
+            onRetry={() => {
+              void points.refetch();
+            }}
+          />
+        </div>
+      )}
+      {points.data?.points.length === 0 && <div className={styles.overlay}>{it.scene.noData}</div>}
+
+      {hovered !== undefined && hover !== null && (
+        <div
+          className={styles.tooltip}
+          style={{ left: hover.x + 14, top: hover.y + 14 }}
+          role="tooltip"
+        >
+          <strong>{hovered.file}</strong>
+          <span className={styles.tooltipPage}>{it.scene.tooltipPage(hovered.page)}</span>
+          <span>{hovered.preview}</span>
+        </div>
+      )}
+
+      {contextLost && (
+        <div className={styles.overlay} role="alert">
+          <p>{it.scene.contextLost}</p>
+          <button type="button" className={ui.primary} onClick={onReload}>
+            {it.scene.reload}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SceneToggleProps {
+  readonly label: string;
+  readonly title?: string;
+  readonly checked: boolean;
+  readonly onChange: (checked: boolean) => void;
+}
+
+function SceneToggle({ label, title, checked, onChange }: SceneToggleProps) {
+  return (
+    <label className={styles.toggle} title={title}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => {
+          onChange(event.target.checked);
+        }}
+      />
+      {label}
+    </label>
+  );
+}

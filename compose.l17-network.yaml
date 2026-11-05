@@ -1,0 +1,15 @@
+# Option B: join the network of the L17 compose project and reach PostgreSQL by service name.
+# Find the network name with `docker network ls` (with the L17 layout it is usually docker_default):
+#   docker compose -f docker-compose.yml -f compose.l17-network.yaml up --build -d
+services:
+  viz-backend:
+    environment:
+      VIZ_DB_URL: jdbc:postgresql://postgres:5432/chatbot
+    networks:
+      - default
+      - l17
+
+networks:
+  l17:
+    external: true
+    name: ${VIZ_L17_NETWORK:-docker_default}

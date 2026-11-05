@@ -1,0 +1,66 @@
+.overall {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-weight: 650;
+}
+
+.OK {
+  color: var(--color-ok);
+}
+
+.WARN {
+  color: var(--color-warn);
+}
+
+.FAIL {
+  color: var(--color-fail);
+}
+
+.checks {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.skipped {
+  opacity: 0.65;
+}
+
+.checkBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.checkTitle {
+  font-weight: 600;
+}
+
+.message {
+  font-weight: 600;
+}
+
+.hint {
+  font-size: 0.93em;
+}
+
+.detail {
+  color: var(--color-text-muted);
+  font-size: 0.82em;
+  overflow-wrap: anywhere;
+}
+
+.warnings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.93em;
+}

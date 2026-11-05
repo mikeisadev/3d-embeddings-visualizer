@@ -1,0 +1,28 @@
+.icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.OK {
+  background: var(--color-ok);
+}
+
+.WARN {
+  background: var(--color-warn);
+}
+
+.FAIL {
+  background: var(--color-fail);
+}
+
+.SKIPPED {
+  background: var(--color-skipped);
+}

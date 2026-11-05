@@ -1,0 +1,35 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgb(5 10 15 / 55%);
+}
+
+.dialog {
+  width: min(520px, 100%);
+  padding: 20px 22px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 35%);
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 1.3em;
+}
+
+.steps {
+  padding-left: 20px;
+}
+
+.steps li {
+  margin-bottom: 6px;
+}
+
+.dialog button {
+  margin-top: 14px;
+}

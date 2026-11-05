@@ -1,0 +1,124 @@
+# Embedding Explorer 3D – Implementation plan
+
+Milestones from §13 of the brief, implemented in order. After each milestone: build, run all
+tests, fix failures, tick the checklist and write a short checkpoint.
+
+Legend: `[x]` done, `[ ]` to do.
+
+## M1 – Backend foundation
+
+- [x] Maven project (`backend/`): Java 21, Spring Boot 4.1.2, starters webmvc / jdbc / validation / actuator, PostgreSQL driver, Maven wrapper
+- [x] `ExplorerProperties`: one validated `@ConfigurationProperties` record bound from `VIZ_*` environment variables
+- [x] Read-only Hikari `DataSource` (pool 5, read-only, statement timeout, starts with the database down)
+- [x] `SqlIdentifier` + `TableRef` value objects (validated, quoted identifiers)
+- [x] Request id filter (`X-Request-Id`, MDC, response header)
+- [x] Error handling: `ErrorCode` enum, `ExplorerException`, SQLSTATE translator, `@RestControllerAdvice` with RFC 9457 `ProblemDetail`
+- [x] Table inspector (pgvector version, columns, index, distance metric detection)
+- [x] Diagnostics checklist (10 checks with dependencies and `SKIPPED`) – `GET /api/v1/diagnostics`
+- [x] Dataset summary – `GET /api/v1/dataset` (files, metadata keys, warnings, metric, index)
+- [x] Tests: unit (identifiers, SQLSTATE translator, error responses, properties validation) and Testcontainers integration (diagnostics: happy path, empty table, missing table, wrong columns, different metadata, `PGVECTOR_MISSING`, database down)
+
+## M2 – Data and math
+
+- [x] Snapshot loading: one consistent read-only transaction, deterministic order, sampling above `VIZ_MAX_POINTS`, dirty-data warnings, memory budget, `DIMENSION_MISMATCH`
+- [x] `datasetVersion` fingerprint, single-flight cache that keeps only the latest snapshot
+- [x] PCA (deterministic block power iteration + Rayleigh–Ritz, sign fix, explained variance), cached per `datasetVersion` and `normalize`
+- [x] `GET /api/v1/points?normalize=`
+- [x] `GET /api/v1/chunks/{id}` (full content, metadata, vector, stats) and `GET /api/v1/chunks?contains=` (full-text match)
+- [x] `GET /api/v1/chunks/{id}/neighbors?k=` (real neighbors in SQL, SQL template returned)
+- [x] `GET /api/v1/compare?a=&b=` (cosine, euclidean, dot product in SQL)
+- [x] Tests: PCA math (known axes, orthonormality, ratios, determinism, performance), snapshot/sampling/neighbors/compare integration tests
+
+## M3 – Frontend MVP
+
+- [x] Vite + React + TypeScript (strict) project, ESLint + Prettier, Vitest + Testing Library
+- [x] Typed API client (timeout, `ProblemDetail` parsing, `ApiError`), zod schemas, retry policy
+- [x] Italian i18n (`src/i18n/it.ts`) and error code → message/hint mapping
+- [x] UI store (selection, compare, colors, filters, preferences)
+- [x] Layout: header, collapsible sidebar sections with "i" buttons, first-run overlay
+- [x] Sections 1–6 and 8: Stato, Come leggere il grafico, Proiezione, Colori e filtri, Chunk selezionato, Confronta due chunk, Esercizi
+- [x] `SceneController` (three.js): instanced points, hover/click/double click, neighbors lines, axes, reset view, resource hygiene
+- [x] 3D view wrapper: error boundary, WebGL detection, context loss, resize
+- [x] Dataset version watcher (reload points and tell the user why)
+- [x] Tests: pure modules, zod schemas, component states (loading / empty / error / success) for every section
+
+## M4 – RAG simulation
+
+- [x] `EmbeddingClient` interface: OpenAI-compatible implementation (RestClient, timeouts, error mapping) and disabled implementation
+- [x] Global token bucket rate limiter
+- [x] `POST /api/v1/search` (top-K without threshold, `passesThreshold`, projected query point, Spring AI SQL) and `POST /api/v1/diagnostics/embedding-test`
+- [x] Sidebar section 7 "Simula una ricerca RAG" (enabled and disabled states)
+- [x] Question marker and lines in 3D
+- [x] Tests: embedding client error mapping (mock HTTP server), rate limiter, search API, RAG panel states
+
+## M5 – Docker and docs
+
+- [x] Backend image (multi-stage, JRE 21, non-root, healthcheck)
+- [x] Frontend image (Node LTS build with type check + tests, unprivileged nginx, `/api/` proxy, security headers, gzip)
+- [x] `docker-compose.yml` (hardened services, `.env`), `.env.example`, `.gitignore`
+- [x] `compose.demo.yaml` + demo database init scripts (synthetic, seeded, normalized vectors)
+- [x] `scripts/smoke-test.sh`
+- [x] Docs: `README.md`, `docs/collegamento-database-vettoriale.md`, `docs/guida-didattica.md`, `docs/architecture.md`, `docs/decisions.md`
+- [x] End-to-end check: demo stack up, smoke test green, database down → `DB_UNAVAILABLE` → recovery
+
+## M6 – Optional features (only after M1–M5 are green)
+
+- [x] `GET /api/v1/vectors` (binary float32) + UMAP in a Web Worker (progress, cancel, errors)
+- [x] "Percorso del documento" lines and file centroids with labels
+- [x] "Fedeltà della proiezione" score (`GET /api/v1/neighbors/sample`)
+- [x] Presentation mode and PNG screenshot
+
+## Checkpoints
+
+### M1 – Backend foundation ✅
+
+- Spring Boot 4.1.2 / Java 21 project with Maven wrapper; one validated `ExplorerProperties` record bound from `VIZ_*` variables (invalid values stop the startup with the property name).
+- Read-only Hikari pool (`readOnlyMode=always`, statement timeout, starts and recovers with the database down).
+- `SqlIdentifier`/`TableRef`, request id filter, RFC 9457 problems with `code`/`requestId`/`timestamp`, SQLSTATE translator.
+- `GET /api/v1/diagnostics` (10 checks, dependencies, `SKIPPED`), `GET /api/v1/dataset` (snapshot-based summary; the snapshot loader and its cache landed here already because the summary needs them).
+- Tests: 74 unit + 21 integration (Testcontainers `pgvector/pgvector:pg17` and plain `postgres:17-alpine`), including database stopped and restarted while the app runs.
+
+### M2 – Data and math ✅
+
+- Snapshot cache with `datasetVersion` (row count + hash of ids and row versions), single-flight loading, deterministic md5 sample, memory budget.
+- PCA (block power iteration + Rayleigh–Ritz): 5,000 × 1,536 in about 0.3 s, verified against an exact eigendecomposition; cached per version and normalize flag.
+- `GET /points`, `GET /chunks/{id}`, `GET /chunks?contains=`, `GET /chunks/{id}/neighbors` (exact, any k up to 50), `GET /compare`.
+- Demo database scripts written early (needed to develop the frontend).
+- Tests: 89 unit + 42 integration, all green.
+
+### M3 – Frontend MVP ✅
+
+- Vite 8 + React 19 + TypeScript 6 (strict, `noUncheckedIndexedAccess`), ESLint (type-checked) + Prettier, Vitest 5 + Testing Library.
+- Typed API client (timeout, problem documents, one `ApiError`), zod validation of every response, retries only for transient GET failures.
+- All Italian text in `src/i18n/it.ts`, including a message and a hint for every error and warning code.
+- Sidebar sections 1–6 and 8 with explicit loading / empty / error / success states and "i" buttons; first-run overlay.
+- three.js `SceneController`: two instanced meshes, hover tooltip, click and double click, real-neighbor lines, A/B comparison line, labeled axes, grid, reset view, context-loss recovery, render on demand.
+- Verified in Chromium against the demo database: a new row is picked up in about 30 s with a notice; database stopped → `DB_UNAVAILABLE` with its hint → back by itself in about 10 s.
+- Tests: 83 frontend tests (pure modules, zod schemas, HTTP client, every section in its states, WebGL fallback, error boundary).
+
+### M4 – RAG simulation ✅
+
+- `EmbeddingClient` with an OpenAI-compatible implementation (RestClient, 5 s / 20 s timeouts, every failure mapped to a stable code, key never logged or returned) and a disabled implementation.
+- Global token bucket shared by `POST /api/v1/search` and `POST /api/v1/diagnostics/embedding-test`.
+- `POST /api/v1/search`: Spring AI's own query, `passesThreshold` per result, question projected with the same PCA, the Spring AI SQL in the response.
+- Sidebar section 7 (enabled and disabled states), "Prova il modello" in the status section, question marker with green (kept) and dashed orange (discarded) links in 3D.
+- Tests: backend 107 unit + 51 integration (fake OpenAI server over real HTTP), frontend 92; verified in Chromium with a local fake provider.
+
+### M5 – Docker and docs ✅
+
+- Backend image: Maven build stage with a cached dependency layer → JRE 21 Alpine, user 10001, `-XX:MaxRAMPercentage=75`, healthcheck on `/actuator/health`.
+- Frontend image: Node 24 LTS build stage running type check, lint and the 92 tests before the build → unprivileged nginx on 8080 with SPA fallback, `/api/` proxy (90 s, large buffers), gzip, strict CSP and security headers, backend resolved at request time.
+- `docker-compose.yml` (only the frontend published, on `127.0.0.1:8088` by default; read-only root, `tmpfs`, `cap_drop: ALL`, `no-new-privileges`, memory and pid limits, healthchecks), `compose.demo.yaml` (in-memory demo database), `compose.l17-network.yaml` (option B), `.env.example`, `scripts/smoke-test.sh`.
+- Docs: README, database connection guide and classroom guide (Italian), architecture with a deployment section, decisions D23–D27; README screenshot taken from the demo stack.
+- Verified on the Docker demo stack: smoke test green, no CSP violations in Chromium (zod set to jitless), database stopped → `DB_UNAVAILABLE` with its hint while the points stay on screen → back by itself about 10 s after the restart.
+- Tests: backend 108 unit + 51 integration (now on the pinned `pgvector/pgvector:0.8.7-pg17` and `postgres:17.11-alpine3.24`), frontend 92.
+
+### M6 – Optional features ✅
+
+- `GET /api/v1/vectors`: the snapshot vectors streamed as float32 little-endian, aligned with `/points` (`X-Rows`, `X-Dimensions`, `X-Dataset-Version`, 409 `DATASET_CHANGED`), never copied in memory.
+- UMAP (umap-js 1.4.0) in a module Web Worker: chosen in "Proiezione", seeded (same data, same picture), same normalization rule as the PCA, progress bar, "Annulla", errors with "Riprova"; the PCA stays on screen meanwhile. 300 chunks in about 1.5 s; umap-js only in the worker bundle.
+- "Fedeltà dei vicini": `GET /api/v1/neighbors/sample` (real neighbors of 200 chunks, computed in memory with the pgvector ordering, equal to the exact database query) compared with the nearest points on screen. Demo data: PCA 17%, UMAP 46%.
+- "Percorsi" (reading order of each file) and "Centroidi" (center and name of each file) in the 3D toolbar; with UMAP the question marker is placed among its results and labeled approximate; the comparison panel stops comparing distances.
+- "Modalità presentazione" (larger text and 3D labels) and "Salva immagine" (PNG with a caption band carrying the projection caveat); the camera leaves room for the toolbar.
+- Verified on the Docker demo stack in Chromium: UMAP, fidelity, guides, download, cancel, presentation and the RAG marker with a local fake provider, with no console errors and no CSP violations.
+- Tests: backend 119 unit + 57 integration, frontend 134 (the frontend image runs them at build time).
