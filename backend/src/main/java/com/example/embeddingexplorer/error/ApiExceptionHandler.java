@@ -36,8 +36,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
-    static final String RETRY_AFTER_PROPERTY = "retryAfterSeconds";
-
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     private static final String UNEXPECTED_DETAIL =
             "An unexpected error occurred. Quote the request id when reporting the problem.";
@@ -54,7 +52,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = problem(failure.code(), failure.getMessage(), request);
         failure.properties().forEach(problem::setProperty);
         HttpHeaders headers = new HttpHeaders();
-        if (failure.properties().get(RETRY_AFTER_PROPERTY) instanceof Number seconds) {
+        if (failure.properties().get(ExplorerException.RETRY_AFTER_SECONDS) instanceof Number seconds) {
             headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(seconds.longValue()));
         }
         return new ResponseEntity<>(problem, headers, failure.code().status());

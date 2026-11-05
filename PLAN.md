@@ -44,12 +44,12 @@ Legend: `[x]` done, `[ ]` to do.
 
 ## M4 – RAG simulation
 
-- [ ] `EmbeddingClient` interface: OpenAI-compatible implementation (RestClient, timeouts, error mapping) and disabled implementation
-- [ ] Global token bucket rate limiter
-- [ ] `POST /api/v1/search` (top-K without threshold, `passesThreshold`, projected query point, Spring AI SQL) and `POST /api/v1/diagnostics/embedding-test`
-- [ ] Sidebar section 7 "Simula una ricerca RAG" (enabled and disabled states)
-- [ ] Question marker and lines in 3D
-- [ ] Tests: embedding client error mapping (mock HTTP server), rate limiter, search API, RAG panel states
+- [x] `EmbeddingClient` interface: OpenAI-compatible implementation (RestClient, timeouts, error mapping) and disabled implementation
+- [x] Global token bucket rate limiter
+- [x] `POST /api/v1/search` (top-K without threshold, `passesThreshold`, projected query point, Spring AI SQL) and `POST /api/v1/diagnostics/embedding-test`
+- [x] Sidebar section 7 "Simula una ricerca RAG" (enabled and disabled states)
+- [x] Question marker and lines in 3D
+- [x] Tests: embedding client error mapping (mock HTTP server), rate limiter, search API, RAG panel states
 
 ## M5 – Docker and docs
 
@@ -95,3 +95,11 @@ Legend: `[x]` done, `[ ]` to do.
 - three.js `SceneController`: two instanced meshes, hover tooltip, click and double click, real-neighbor lines, A/B comparison line, labeled axes, grid, reset view, context-loss recovery, render on demand.
 - Verified in Chromium against the demo database: a new row is picked up in about 30 s with a notice; database stopped → `DB_UNAVAILABLE` with its hint → back by itself in about 10 s.
 - Tests: 83 frontend tests (pure modules, zod schemas, HTTP client, every section in its states, WebGL fallback, error boundary).
+
+### M4 – RAG simulation ✅
+
+- `EmbeddingClient` with an OpenAI-compatible implementation (RestClient, 5 s / 20 s timeouts, every failure mapped to a stable code, key never logged or returned) and a disabled implementation.
+- Global token bucket shared by `POST /api/v1/search` and `POST /api/v1/diagnostics/embedding-test`.
+- `POST /api/v1/search`: Spring AI's own query, `passesThreshold` per result, question projected with the same PCA, the Spring AI SQL in the response.
+- Sidebar section 7 (enabled and disabled states), "Prova il modello" in the status section, question marker with green (kept) and dashed orange (discarded) links in 3D.
+- Tests: backend 107 unit + 51 integration (fake OpenAI server over real HTTP), frontend 92; verified in Chromium with a local fake provider.

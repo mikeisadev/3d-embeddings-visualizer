@@ -149,6 +149,39 @@ export const chunkMatchesSchema = z.object({
   truncated: z.boolean(),
 });
 
+export const searchMatchSchema = z.object({
+  rank: z.number().int().positive(),
+  id: z.string(),
+  distance: z.number().nullable(),
+  similarity: z.number().nullable(),
+  passesThreshold: z.boolean(),
+  file: z.string(),
+  page: z.number().int().nullable(),
+  chunkIndex: z.number().int().nullable(),
+  preview: z.string(),
+});
+
+export const searchResultSchema = z.object({
+  datasetVersion: z.string(),
+  model: z.string(),
+  embeddingLatencyMs: count,
+  dimensions: z.number().int().positive(),
+  metric: resolvedMetricSchema,
+  topK: z.number().int().positive(),
+  similarityThreshold: z.number().min(0).max(1),
+  distanceThreshold: z.number(),
+  normalized: z.boolean(),
+  queryPoint: z.object({ x: z.number(), y: z.number(), z: z.number() }),
+  results: z.array(searchMatchSchema),
+  springAiSql: z.string(),
+});
+
+export const embeddingTestSchema = z.object({
+  model: z.string(),
+  dimensions: z.number().int().positive(),
+  latencyMs: count,
+});
+
 /** RFC 9457 problem document with the backend extensions; other members are kept. */
 export const problemSchema = z.looseObject({
   status: z.number().optional(),
@@ -177,3 +210,14 @@ export type Neighbors = z.infer<typeof neighborsSchema>;
 export type Comparison = z.infer<typeof comparisonSchema>;
 export type ChunkMatches = z.infer<typeof chunkMatchesSchema>;
 export type Problem = z.infer<typeof problemSchema>;
+export type SearchMatch = z.infer<typeof searchMatchSchema>;
+export type SearchResult = z.infer<typeof searchResultSchema>;
+export type EmbeddingTest = z.infer<typeof embeddingTestSchema>;
+
+/** Body of POST /api/v1/search. */
+export interface SearchRequest {
+  readonly question: string;
+  readonly topK: number;
+  readonly similarityThreshold: number;
+  readonly normalize: boolean;
+}

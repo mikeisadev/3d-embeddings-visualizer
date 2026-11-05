@@ -8,6 +8,7 @@ import { GuideSection } from '../features/guide/GuideSection';
 import { Header } from '../features/header/Header';
 import { NoticeBanner } from '../features/notices/NoticeBanner';
 import { ProjectionSection } from '../features/projection/ProjectionSection';
+import { RagSearchSection } from '../features/search/RagSearchSection';
 import { StatusSection } from '../features/status/StatusSection';
 import { useDataWatchers } from '../hooks/useDataWatchers';
 import { it } from '../i18n/it';
@@ -43,6 +44,7 @@ export function App() {
           <ColorsSection />
           <SelectedChunkSection />
           <CompareSection />
+          <RagSearchSection />
           <ExercisesSection />
         </aside>
         <main className={styles.scene} aria-label={it.app.sceneLabel}>

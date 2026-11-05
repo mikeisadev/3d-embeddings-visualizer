@@ -82,7 +82,7 @@ const CLICK_TOLERANCE_PX = 5;
 const FOCUS_DISTANCE = 0.7;
 const CAMERA_ANIMATION_MS = 450;
 const AXIS_LENGTH = 0.62;
-const LABEL_HEIGHT = 0.05;
+const LABEL_HEIGHT = 0.032;
 const MAX_PIXEL_RATIO = 2;
 const DEFAULT_CAMERA = new Vector3(1.05, 0.75, 1.25);
 const ORIGIN = new Vector3(0, 0, 0);
@@ -271,15 +271,14 @@ export class SceneController {
   /** Moves the camera smoothly to frame point {@code index}. */
   focusPoint(index: number): void {
     const target = this.positionOf(index);
-    if (target === null) {
-      return;
+    if (target !== null) {
+      this.focusTarget(target);
     }
-    const offset = this.camera.position
-      .clone()
-      .sub(this.controls.target)
-      .normalize()
-      .multiplyScalar(FOCUS_DISTANCE);
-    this.animateCamera(target, target.clone().add(offset));
+  }
+
+  /** Moves the camera smoothly to frame a position, for example the question of a RAG search. */
+  focusPosition(position: Vec3): void {
+    this.focusTarget(new Vector3(...position));
   }
 
   resetView(): void {
@@ -574,6 +573,15 @@ export class SceneController {
       this.hovered = index;
       this.callbacks.onHover(index, this.lastClient.x, this.lastClient.y);
     }
+  }
+
+  private focusTarget(target: Vector3): void {
+    const offset = this.camera.position
+      .clone()
+      .sub(this.controls.target)
+      .normalize()
+      .multiplyScalar(FOCUS_DISTANCE);
+    this.animateCamera(target, target.clone().add(offset));
   }
 
   private animateCamera(target: Vector3, position: Vector3): void {

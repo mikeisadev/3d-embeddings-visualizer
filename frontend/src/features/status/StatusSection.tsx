@@ -9,6 +9,7 @@ import { toAsyncState } from '../../lib/asyncState';
 import { cx } from '../../lib/cx';
 import { describeCode } from '../../lib/errorMessages';
 import { formatInteger } from '../../lib/format';
+import { EmbeddingLiveTest } from './EmbeddingLiveTest';
 import styles from './StatusSection.module.css';
 
 /** pgvector operators: SQL symbols, shown as code. */
@@ -92,6 +93,7 @@ function CheckItem({ check }: { readonly check: DiagnosticCheck }) {
           </>
         )}
         <span className={styles.detail}>{check.detail}</span>
+        {check.id === 'embedding.client' && check.facts.enabled === true && <EmbeddingLiveTest />}
       </div>
     </li>
   );

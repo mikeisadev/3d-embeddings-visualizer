@@ -15,7 +15,7 @@ type Matcher = string | RegExp;
  */
 export function mockApi(routes: readonly (readonly [Matcher, MockReply])[]) {
   const fetchMock = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => {
-    const url = new URL(input instanceof Request ? input.url : String(input), 'http://localhost');
+    const url = new URL(urlOf(input), 'http://localhost');
     const target = url.pathname + url.search;
     const route = routes.find(([matcher]) =>
       typeof matcher === 'string' ? url.pathname === matcher : matcher.test(target),
@@ -51,4 +51,23 @@ function reply(mock: MockReply): Promise<Response> {
       },
     }),
   );
+}
+
+type FetchMock = ReturnType<typeof mockApi>;
+
+function urlOf(input: RequestInfo | URL): string {
+  if (input instanceof Request) {
+    return input.url;
+  }
+  return input instanceof URL ? input.href : input;
+}
+
+/** The calls made to a path (the query string is ignored). */
+export function callsTo(fetchMock: FetchMock, path: string) {
+  return fetchMock.mock.calls.filter(([input]) => urlOf(input).split('?')[0]?.endsWith(path));
+}
+
+/** The JSON body sent with a call. */
+export function jsonBody(init: RequestInit | undefined): unknown {
+  return typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
 }

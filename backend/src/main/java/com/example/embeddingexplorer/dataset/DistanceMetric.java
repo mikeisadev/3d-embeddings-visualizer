@@ -55,6 +55,16 @@ public enum DistanceMetric {
         return column + " " + operator + " " + vector;
     }
 
+    /**
+     * The similarity search Spring AI {@code PgVectorStore} runs for this metric (without a
+     * metadata filter); the third parameter is {@code 1 - similarityThreshold}.
+     */
+    public String springAiSearchSql(String table) {
+        String distance = distanceSql("embedding", "?");
+        return "SELECT *, " + distance + " AS distance FROM " + table + " WHERE " + distance
+                + " < ? ORDER BY distance LIMIT ?";
+    }
+
     /** Spring AI's score, 1 − distance. For cosine it is exactly the cosine similarity. */
     public double similarity(double distance) {
         return 1.0 - distance;

@@ -5,14 +5,20 @@ import {
   comparisonSchema,
   datasetSchema,
   diagnosticsSchema,
+  embeddingTestSchema,
   neighborsSchema,
   pointsSchema,
+  type SearchRequest,
+  searchResultSchema,
 } from './schemas';
 
 const BASE = '/api/v1';
 
 /** The first load of a large table (snapshot + PCA) can take a few seconds. */
 const SLOW_TIMEOUT_MS = 60_000;
+
+/** An embedding call plus the database query; a cold local model can be slow. */
+const SEARCH_TIMEOUT_MS = 45_000;
 
 /** Typed functions for every backend endpoint. */
 export const api = {
@@ -55,4 +61,18 @@ export const api = {
         signal,
       },
     ),
+
+  /** POST, never retried automatically: it calls a (possibly paid) embedding provider. */
+  search: (request: SearchRequest) =>
+    requestJson(`${BASE}/search`, searchResultSchema, {
+      method: 'POST',
+      body: request,
+      timeoutMs: SEARCH_TIMEOUT_MS,
+    }),
+
+  embeddingTest: () =>
+    requestJson(`${BASE}/diagnostics/embedding-test`, embeddingTestSchema, {
+      method: 'POST',
+      timeoutMs: SEARCH_TIMEOUT_MS,
+    }),
 };

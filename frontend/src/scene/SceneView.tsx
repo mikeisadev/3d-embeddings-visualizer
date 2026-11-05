@@ -5,7 +5,13 @@ import { useNeighbors, usePointCloudView, usePoints } from '../hooks/queries';
 import { useColorMapping, usePointStates } from '../hooks/usePointStates';
 import { it } from '../i18n/it';
 import { useUiStore } from '../state/uiStore';
-import { type PointAppearance, SceneController } from './SceneController';
+import { applyTransform } from '../lib/displayTransform';
+import {
+  type PointAppearance,
+  type QueryLink,
+  type QueryMarker,
+  SceneController,
+} from './SceneController';
 import { computeEmphasis, focusSet } from './sceneModel';
 import styles from './SceneView.module.css';
 import { isWebGl2Available } from './webgl';
@@ -57,6 +63,7 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
   const setShowGrid = useUiStore((state) => state.setShowGrid);
   const focusRequest = useUiStore((state) => state.focusRequest);
   const select = useUiStore((state) => state.select);
+  const ragOverlay = useUiStore((state) => state.ragOverlay);
   const neighbors = useNeighbors(selectedId);
 
   const indexOf = (id: string | null) =>
@@ -72,6 +79,27 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
       .filter((index): index is number => index !== undefined);
   }, [neighborData, selectedId, view]);
 
+  /** The last RAG search, only when it belongs to the points on screen (same data, same projection). */
+  const rag = useMemo(() => {
+    if (ragOverlay === null || view === null) {
+      return null;
+    }
+    const sameData = ragOverlay.datasetVersion === view.data.datasetVersion;
+    if (!sameData || ragOverlay.normalized !== view.data.projection.normalized) {
+      return null;
+    }
+    const links: QueryLink[] = ragOverlay.results.flatMap((result) => {
+      const index = view.indexById.get(result.id);
+      return index === undefined ? [] : [{ index, passes: result.passes }];
+    });
+    const marker: QueryMarker = {
+      position: applyTransform(view.transform, ragOverlay.queryPoint),
+      label: it.rag.questionMarker,
+      links,
+    };
+    return { marker, indices: links.map((link) => link.index) };
+  }, [ragOverlay, view]);
+
   const appearance = useMemo<PointAppearance | null>(() => {
     if (mapping === null || states === null) {
       return null;
@@ -79,7 +107,7 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
     const focus = focusSet({
       selected: selectedIndex,
       neighbors: neighborIndices,
-      ragResults: null,
+      ragResults: rag?.indices ?? null,
       textMatches: states.textMatches,
     });
     return {
@@ -88,7 +116,7 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
       emphasized: computeEmphasis(states.inFilter, focus),
       pointSize,
     };
-  }, [mapping, states, selectedIndex, neighborIndices, pointSize]);
+  }, [mapping, states, selectedIndex, neighborIndices, rag, pointSize]);
 
   const onSelectPoint = useEffectEvent((index: number | null) => {
     select(index === null || view === null ? null : (view.data.points[index]?.id ?? null));
@@ -155,6 +183,22 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
       it.compare.slotB,
     ]);
   }, [compareIndexA, compareIndexB]);
+
+  useEffect(() => {
+    controllerRef.current?.setQueryMarker(rag?.marker ?? null);
+  }, [rag]);
+
+  // Frame each new question once; reloading the points keeps the camera where it is.
+  const focusQuestion = useEffectEvent(() => {
+    if (rag !== null) {
+      controllerRef.current?.focusPosition(rag.marker.position);
+    }
+  });
+  useEffect(() => {
+    if (ragOverlay !== null) {
+      focusQuestion();
+    }
+  }, [ragOverlay]);
 
   const ratios = view?.data.projection.explainedVarianceRatio;
   const axisLabels = useMemo(

@@ -127,7 +127,7 @@ class ApiExceptionHandlerTest {
             throw new ExplorerException(
                     ErrorCode.RATE_LIMITED,
                     "Too many searches.",
-                    Map.of(ApiExceptionHandler.RETRY_AFTER_PROPERTY, 6));
+                    Map.of(ExplorerException.RETRY_AFTER_SECONDS, 6));
         }
 
         @GetMapping("/test/database-down")

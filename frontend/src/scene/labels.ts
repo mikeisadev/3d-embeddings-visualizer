@@ -4,8 +4,9 @@ const FONT_PX = 44;
 const PADDING_PX = 14;
 
 /**
- * A text label that always faces the camera: the text is drawn on a canvas used as the
- * texture of a sprite. `height` is the label height in scene units.
+ * A text label that always faces the camera and keeps the same size on screen while zooming:
+ * the text is drawn on a canvas used as the texture of a sprite. `height` is the label height
+ * as a fraction of the height seen at distance 1 from the camera (about 0.03 reads well).
  */
 export function createTextSprite(text: string, color: string, height: number): Sprite {
   const canvas = document.createElement('canvas');
@@ -29,7 +30,12 @@ export function createTextSprite(text: string, color: string, height: number): S
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.minFilter = LinearFilter;
-  const material = new SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+  const material = new SpriteMaterial({
+    map: texture,
+    transparent: true,
+    depthTest: false,
+    sizeAttenuation: false,
+  });
   const sprite = new Sprite(material);
   sprite.scale.set((height * canvas.width) / canvas.height, height, 1);
   sprite.renderOrder = 10;

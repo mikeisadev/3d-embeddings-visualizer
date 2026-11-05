@@ -6,6 +6,14 @@ export type CompareSlot = 'A' | 'B';
 
 export type Notice = 'datasetChanged' | 'datasetReloaded';
 
+/** The last RAG search, drawn in the 3D view as the question marker and its links. */
+export interface RagOverlay {
+  readonly datasetVersion: string;
+  readonly normalized: boolean;
+  readonly queryPoint: { readonly x: number; readonly y: number; readonly z: number };
+  readonly results: readonly { readonly id: string; readonly passes: boolean }[];
+}
+
 export const DEFAULT_NEIGHBORS_K = 10;
 export const DEFAULT_POINT_SIZE = 1;
 
@@ -29,6 +37,7 @@ export interface UiState {
   readonly focusRequest: { readonly id: string; readonly nonce: number } | null;
   readonly presentation: boolean;
   readonly notice: Notice | null;
+  readonly ragOverlay: RagOverlay | null;
 
   readonly select: (id: string | null) => void;
   readonly setCompare: (slot: CompareSlot, id: string | null) => void;
@@ -47,6 +56,7 @@ export interface UiState {
   readonly focusOn: (id: string) => void;
   readonly setPresentation: (presentation: boolean) => void;
   readonly setNotice: (notice: Notice | null) => void;
+  readonly setRagOverlay: (overlay: RagOverlay | null) => void;
 }
 
 export const useUiStore = create<UiState>()((set) => ({
@@ -64,6 +74,7 @@ export const useUiStore = create<UiState>()((set) => ({
   focusRequest: null,
   presentation: false,
   notice: null,
+  ragOverlay: null,
 
   select: (id) => {
     set({ selectedId: id });
@@ -119,5 +130,8 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setNotice: (notice) => {
     set({ notice });
+  },
+  setRagOverlay: (overlay) => {
+    set({ ragOverlay: overlay });
   },
 }));

@@ -115,3 +115,21 @@ Choices that the brief left open. Each entry: context, decision, consequence.
 - **Context:** three.js is about 580 kB minified; the sidebar must stay usable even when the 3D view cannot load.
 - **Decision:** the 3D view is lazy-loaded in its own chunk behind an error boundary; frames are rendered only when the camera moves or the data changes (the animation loop only checks for changes); `<code>`/`<pre>` disable font ligatures so that `<=>` never turns into an arrow.
 - **Consequence:** fast first paint; idle laptops do not spin the GPU.
+
+## D20 – RAG simulation
+
+- **Context:** the simulation must behave exactly like Spring AI and still show what the threshold cuts.
+- **Decision:** the question is embedded once; the database runs the same top-K query as `PgVectorStore` (same distance expression, same index, default `hnsw.ef_search`) without the `WHERE distance < 1 − threshold` clause, and each result gets `passesThreshold = distance < 1 − threshold`, the same comparison. The response shows the original Spring AI SQL. The question is projected with the PCA model of the `normalize` flag sent by the view; the 3D marker is drawn only while the points on screen have the same `datasetVersion` and flag, and the camera frames each new question once.
+- **Consequence:** "Entra nel contesto" is exactly what the chatbot would put in the prompt; a stale marker is never drawn in the wrong place.
+
+## D21 – Embedding client
+
+- **Context:** OpenAI, Ollama and Docker Model Runner all expose the OpenAI `/embeddings` API; the call may cost money and its errors may contain secrets.
+- **Decision:** Spring `RestClient` on the JDK `HttpClient` (connect 5 s, read 20 s). 401/403 → `EMBEDDING_AUTH_FAILED`, 404 → `EMBEDDING_MODEL_NOT_FOUND`, 429 → `EMBEDDING_RATE_LIMITED`, timeouts → `EMBEDDING_TIMEOUT`, anything else (400, 5xx, connection refused, unreadable or empty vector, non-finite numbers) → `EMBEDDING_PROVIDER_ERROR`. Error details never include the provider's body (OpenAI echoes part of the key there). A disabled feature is a separate `EmbeddingClient`; services call `requireEnabled()` first, so a disabled simulation answers 503 before touching the database or the rate limit.
+- **Consequence:** one code path for every provider; the student sees an actionable message for each failure.
+
+## D22 – One rate limit for the paid provider
+
+- **Context:** `/search` and the live test both call the provider.
+- **Decision:** one global, in-memory token bucket (capacity `VIZ_SEARCH_RATE_LIMIT_PER_MINUTE`, refilled continuously over a minute) shared by both; `RATE_LIMITED` (429) carries `retryAfterSeconds` and a `Retry-After` header. The frontend never retries a search automatically.
+- **Consequence:** a class cannot burn the API budget by accident; bursts up to the limit are allowed.

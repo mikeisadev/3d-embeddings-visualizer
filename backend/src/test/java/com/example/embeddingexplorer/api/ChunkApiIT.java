@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.within;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -181,6 +183,18 @@ class ChunkApiIT {
         mvc.perform(get("/api/v1/chunks").param("contains", "%' OR '1'='1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ids", hasSize(0)));
+    }
+
+    @Test
+    void theRagSimulationIsCleanlyDisabledByDefault() throws Exception {
+        mvc.perform(post("/api/v1/search")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"question\": \"Come chiedo le ferie?\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("EMBEDDING_DISABLED"));
+        mvc.perform(post("/api/v1/diagnostics/embedding-test"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("EMBEDDING_DISABLED"));
     }
 
     private JsonNode getJson(String path) throws Exception {

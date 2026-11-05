@@ -15,6 +15,9 @@ import java.util.Objects;
  */
 public class ExplorerException extends RuntimeException {
 
+    /** Property with the seconds to wait; the error handler also sends it as Retry-After. */
+    public static final String RETRY_AFTER_SECONDS = "retryAfterSeconds";
+
     private final ErrorCode code;
     private final Map<String, Object> properties;
 

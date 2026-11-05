@@ -1,5 +1,6 @@
 import type {
   ChunkDetails,
+  SearchResult,
   Comparison,
   Dataset,
   Diagnostics,
@@ -194,3 +195,68 @@ export function problem(code: string, status: number, detail = 'detail') {
     timestamp: '2026-11-05T08:00:00Z',
   };
 }
+
+export const diagnosticsRagEnabled: Diagnostics = {
+  ...diagnosticsOk,
+  checks: diagnosticsOk.checks.map((check) =>
+    check.id === 'embedding.client'
+      ? {
+          ...check,
+          status: 'OK' as const,
+          code: null,
+          detail: 'Model text-embedding-3-small at https://api.openai.com/v1.',
+          facts: { enabled: true, apiKeyPresent: true },
+        }
+      : check,
+  ),
+};
+
+export const searchResult: SearchResult = {
+  datasetVersion: '4-abc',
+  model: 'text-embedding-3-small',
+  embeddingLatencyMs: 230,
+  dimensions: 6,
+  metric: { metric: 'COSINE', source: 'DETECTED' },
+  topK: 3,
+  similarityThreshold: 0.5,
+  distanceThreshold: 0.5,
+  normalized: true,
+  queryPoint: { x: 0.15, y: 0.07, z: -0.15 },
+  results: [
+    {
+      rank: 1,
+      id: 'a',
+      distance: 0.2,
+      similarity: 0.8,
+      passesThreshold: true,
+      file: 'ferie.pdf',
+      page: 1,
+      chunkIndex: 0,
+      preview: 'Le ferie si richiedono',
+    },
+    {
+      rank: 2,
+      id: 'b',
+      distance: 0.4,
+      similarity: 0.6,
+      passesThreshold: true,
+      file: 'ferie.pdf',
+      page: 2,
+      chunkIndex: 1,
+      preview: 'Permessi brevi',
+    },
+    {
+      rank: 3,
+      id: 'c',
+      distance: 0.7,
+      similarity: 0.3,
+      passesThreshold: false,
+      file: 'sicurezza.pdf',
+      page: 1,
+      chunkIndex: 0,
+      preview: 'Uscite di emergenza',
+    },
+  ],
+  springAiSql:
+    'SELECT *, embedding <=> ? AS distance FROM public.vector_store WHERE embedding <=> ? < ? ORDER BY distance LIMIT ?',
+};
