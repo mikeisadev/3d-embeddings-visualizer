@@ -11,9 +11,11 @@ import { ProjectionSection } from '../features/projection/ProjectionSection';
 import { RagSearchSection } from '../features/search/RagSearchSection';
 import { StatusSection } from '../features/status/StatusSection';
 import { useDataWatchers } from '../hooks/useDataWatchers';
+import { usePresentationMode } from '../hooks/usePresentationMode';
 import { it } from '../i18n/it';
 import { GUIDE_SEEN_KEY, readFlag, writeFlag } from '../lib/storage';
 import { SceneErrorBoundary } from '../scene/SceneErrorBoundary';
+import { useUmapController } from '../umap/useUmapController';
 import styles from './App.module.css';
 
 /** three.js is loaded separately, so the sidebar is usable before the 3D view is ready. */
@@ -22,6 +24,8 @@ const SceneView = lazy(() => import('../scene/SceneView'));
 /** The app shell: header, sidebar with the teaching sections, 3D view. */
 export function App() {
   useDataWatchers();
+  useUmapController();
+  usePresentationMode();
   const [showGuide, setShowGuide] = useState(() => !readFlag(GUIDE_SEEN_KEY));
 
   const dismissGuide = () => {

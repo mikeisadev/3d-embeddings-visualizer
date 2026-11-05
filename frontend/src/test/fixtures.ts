@@ -4,6 +4,7 @@ import type {
   Comparison,
   Dataset,
   Diagnostics,
+  NeighborSample,
   Neighbors,
   Point,
   PointCloud,
@@ -129,6 +130,38 @@ export const points: PointCloud = {
     point('b', 'ferie.pdf', 2, 0.2, 'HR'),
     point('c', 'sicurezza.pdf', 1, -0.3, 'OPS'),
     point('d', 'sicurezza.pdf', 2, -0.4, 'OPS'),
+  ],
+};
+
+/** A cloud of {@code count} points in two files, for the features that need more than 4 points. */
+export function pointCloudOf(count: number): PointCloud {
+  return {
+    ...points,
+    datasetVersion: `${String(count)}-big`,
+    rowsWithEmbedding: count,
+    points: Array.from({ length: count }, (_, index) =>
+      point(
+        `p${String(index)}`,
+        index % 2 === 0 ? 'ferie.pdf' : 'sicurezza.pdf',
+        index + 1,
+        index / 10,
+        'HR',
+      ),
+    ),
+  };
+}
+
+/** Real neighbors (k = 1) of the fixture points: a and b, c and d are each other's nearest. */
+export const neighborSample: NeighborSample = {
+  datasetVersion: '4-abc',
+  metric: { metric: 'COSINE', source: 'DETECTED' },
+  k: 1,
+  loadedChunks: 4,
+  samples: [
+    { id: 'a', neighbors: ['b'] },
+    { id: 'b', neighbors: ['a'] },
+    { id: 'c', neighbors: ['d'] },
+    { id: 'd', neighbors: ['c'] },
   ],
 };
 

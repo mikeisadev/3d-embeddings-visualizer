@@ -43,9 +43,9 @@ Alla fine dell'attività gli studenti sanno:
    azioni principali; si chiude con «Ho capito» e si può rivedere da «Come leggere il grafico».
 4. Nella sezione **Stato** tutti i controlli devono essere verdi (✓). Un avviso (!) non blocca la
    lezione; un errore (✕) mostra il messaggio e il suggerimento per risolverlo (vedi §7).
-5. Per il proiettore: browser a schermo intero (F11), zoom del browser al 110–125% se l'aula è grande,
-   finestra il più larga possibile perché la vista 3D occupa tutto lo spazio a destra della barra
-   laterale.
+5. Per il proiettore: browser a schermo intero (F11) e il pulsante **«Modalità presentazione»**
+   nell'intestazione (testo ed etichette 3D più grandi); se l'aula è grande, anche lo zoom del browser
+   al 110–125%.
 
 > Il dettaglio di installazione, configurazione e risoluzione dei problemi è nel `README.md` e in
 > `docs/collegamento-database-vettoriale.md`.
@@ -60,7 +60,7 @@ modo per far leggere agli studenti il «perché» di ogni pannello.
 | --- | --- | --- |
 | **Stato** | I 10 controlli sul database (connessione, pgvector, tabella, colonne, righe, dimensioni, norme, indice, metadata, modello di embedding) e il riepilogo del dataset. | La tabella `vector_store` creata da Spring AI ha `id`, `content`, `metadata` (json) ed `embedding` (`vector(1536)`); l'indice HNSW con `vector_cosine_ops` dice che la metrica è il coseno. Le norme ≈ 1: i vettori OpenAI sono normalizzati. |
 | **Come leggere il grafico** | Una guida di un minuto. | Il paragone dell'ombra sul muro (§5). |
-| **Proiezione** | Metodo PCA, varianza spiegata di PC1, PC2, PC3 e totale; «Normalizza i vettori»; «Dimensione dei punti». | La nota fissa: «Le posizioni sono una proiezione: le distanze vere sono quelle calcolate dal database.» |
+| **Proiezione** | Metodo (PCA o UMAP), varianza spiegata di PC1, PC2, PC3 e totale; «Fedeltà dei vicini»; «Normalizza i vettori»; «Dimensione dei punti». | La nota fissa: «Le posizioni sono una proiezione: le distanze vere sono quelle calcolate dal database.» La fedeltà dice quanti vicini veri restano vicini nel grafico. |
 | **Colori e filtri** | «Colora per» (file, pagina, indice del chunk, lunghezza del testo o qualunque chiave dei metadata), legenda, filtri per file e pagine, «Cerca nel testo», lista dei «Chunk visibili». | Clic su una voce della legenda la nasconde, Alt+clic la isola. La lista è l'alternativa accessibile al grafico: da qui si seleziona un chunk anche senza mouse. |
 | **Chunk selezionato** | File, pagina, indice; testo completo; tabella dei metadata; statistiche del vettore; i primi 10 numeri; il «codice a barre» di tutti i numeri; i **vicini veri**. | Il codice a barre: ogni quadratino è un numero (griglia 48 × 32 per 1536), blu i negativi, rosso i positivi. Passando il mouse si legge il valore. |
 | **Confronta due chunk** | Similarità del coseno, distanze e prodotto scalare **veri** accanto alla distanza **nel grafico**. | La frase «Il grafico mostra il X% della distanza vera». |
@@ -76,6 +76,9 @@ modo per far leggere agli studenti il «perché» di ogni pannello.
   Clic su uno spazio vuoto deseleziona.
 - **Doppio clic** avvicina la camera al punto. **«Reimposta vista»** torna all'inquadratura iniziale;
   **«Griglia»** mostra un piano di riferimento.
+- **«Percorsi»** unisce i chunk di ogni file nell'ordine di lettura; **«Centroidi»** mostra il centro di
+  ogni file con il suo nome. **«Salva immagine»** scarica un PNG della vista con la nota sulla
+  proiezione, utile per le slide o per gli appunti degli studenti.
 - Gli assi sono etichettati **PC1, PC2, PC3** con la percentuale di varianza che ciascuno conserva.
 - In basso a sinistra c'è sempre il promemoria: «Proiezione PCA: le distanze nel grafico sono
   approssimate.»
@@ -90,7 +93,11 @@ modo per far leggere agli studenti il «perché» di ogni pannello.
    demo, più ordinato, circa il 42%): gran parte dell'informazione resta fuori dal grafico.
 3. **I numeri veri vengono dal database.** Vicini, similarità e distanze sono calcolati da PostgreSQL
    con pgvector su tutti i 1536 numeri, mai sulle coordinate 3D.
-4. **Ricerca esatta contro ricerca approssimata.** La lista dei vicini veri confronta il vettore con
+4. **PCA o UMAP?** La PCA è un'ombra «onesta»: lineare, con la varianza spiegata. UMAP (sezione
+   «Proiezione») tiene vicini i chunk che sono vicini davvero, ma deforma le distanze: due gruppi
+   lontani nel grafico non sono per forza «più diversi» di due gruppi vicini. La **fedeltà dei vicini**
+   misura quanto ci si può fidare di «vicino nel grafico» con l'uno e con l'altro metodo.
+5. **Ricerca esatta contro ricerca approssimata.** La lista dei vicini veri confronta il vettore con
    *tutti* gli altri (ricerca esatta). Il chatbot invece usa l'indice **HNSW**, approssimato ma molto più
    veloce su milioni di righe; la simulazione RAG usa lo stesso indice, come Spring AI. Domanda per la
    classe: «Perché in produzione si accetta un risultato approssimato?»
@@ -161,7 +168,8 @@ discussione. Si possono svolgere in coppia, uno studente ai comandi e uno che pr
   2. Caricare un nuovo PDF nel chatbot della L17.
   3. Entro circa 30 secondi compare l'avviso «I dati nel database sono cambiati… ricarico i punti»;
      poi «Punti aggiornati con i nuovi dati».
-  4. Nella legenda, Alt+clic sul nuovo file per isolarlo.
+  4. Nella legenda, Alt+clic sul nuovo file per isolarlo; attivare «Percorsi» e «Centroidi» per vedere
+     come il documento «cammina» da una pagina all'altra e dove sta il suo centro.
 - **Che cosa ci si aspetta:** i nuovi chunk si dispongono vicino ai file che trattano argomenti simili;
   se il PDF parla di un tema nuovo, formano un gruppo a sé.
 - **Discussione:** perché nessuno ha dovuto «spostare» i vecchi punti? (Ogni embedding dipende solo dal
@@ -185,11 +193,15 @@ discussione. Si possono svolgere in coppia, uno studente ai comandi e uno che pr
 ### Esercizio D – Quanto perde la proiezione?
 
 - **Obiettivo:** dare un numero all'«ombra».
-- **Passi:** aprire «Proiezione» e leggere la varianza di PC1, PC2, PC3 e il totale.
+- **Passi:** aprire «Proiezione» e leggere la varianza di PC1, PC2, PC3 e il totale; leggere la
+  «Fedeltà dei vicini»; poi scegliere UMAP e rileggere la fedeltà.
 - **Che cosa ci si aspetta:** un totale di solito ben sotto il 50% (circa il 42% con il database
-  demo); la frase «il X% non si vede».
+  demo); la frase «il X% non si vede». Con il database demo la PCA conserva in media meno di 2 dei 10
+  vicini veri, UMAP quasi 5: UMAP separa meglio i gruppi, ma non ha una varianza spiegata e le sue
+  distanze non si confrontano con quelle vere.
 - **Discussione:** se la varianza è poca, ha senso fidarsi delle distanze nel grafico? Perché i vicini
-  veri (sezione «Chunk selezionato») a volte non sono i punti più vicini nel 3D?
+  veri (sezione «Chunk selezionato») a volte non sono i punti più vicini nel 3D? Perché la domanda
+  della ricerca RAG, con UMAP, ha una «posizione approssimata»?
 
 ### Esercizio E – Il metadata `department`
 

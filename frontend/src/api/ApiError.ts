@@ -1,6 +1,14 @@
-/** Error codes produced by the client itself, when there is no problem document from the backend. */
+/**
+ * Error codes produced by the client itself, when there is no problem document from the
+ * backend. UMAP_FAILED comes from the UMAP worker: it is shown like every other error.
+ */
 export type ClientErrorCode =
-  'NETWORK_ERROR' | 'TIMEOUT' | 'BACKEND_UNAVAILABLE' | 'INVALID_RESPONSE' | 'UNEXPECTED_STATUS';
+  | 'NETWORK_ERROR'
+  | 'TIMEOUT'
+  | 'BACKEND_UNAVAILABLE'
+  | 'INVALID_RESPONSE'
+  | 'UNEXPECTED_STATUS'
+  | 'UMAP_FAILED';
 
 interface ApiErrorInit {
   readonly code: string;

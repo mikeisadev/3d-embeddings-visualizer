@@ -30,6 +30,8 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createTextSprite, disposeTextSprite } from './labels';
+import type { FileGuide } from './sceneModel';
+import { captionedPng } from './screenshot';
 
 export interface SceneCallbacks {
   /** The point under the pointer changed or moved; `null` when the pointer leaves the points. */
@@ -63,6 +65,12 @@ export interface QueryMarker {
   readonly links: readonly QueryLink[];
 }
 
+/** Which file guides to draw. */
+export interface GuideOptions {
+  readonly paths: boolean;
+  readonly centroids: boolean;
+}
+
 type Vec3 = readonly [number, number, number];
 
 interface CameraAnimation {
@@ -83,8 +91,17 @@ const FOCUS_DISTANCE = 0.7;
 const CAMERA_ANIMATION_MS = 450;
 const AXIS_LENGTH = 0.62;
 const LABEL_HEIGHT = 0.032;
+const CENTROID_SIZE = 0.03;
+const CENTROID_CROSS: readonly Vec3[] = [
+  [CENTROID_SIZE, 0, 0],
+  [0, CENTROID_SIZE, 0],
+  [0, 0, CENTROID_SIZE],
+];
 const MAX_PIXEL_RATIO = 2;
-const DEFAULT_CAMERA = new Vector3(1.05, 0.75, 1.25);
+/** Labels are larger in presentation mode, for the projector. */
+const PRESENTATION_LABEL_SCALE = 1.4;
+/** About 2 units away: the unit box fits with room for the toolbar above the top axis label. */
+const DEFAULT_CAMERA = new Vector3(1.2, 0.86, 1.44);
 const ORIGIN = new Vector3(0, 0, 0);
 
 const PALETTE = {
@@ -131,6 +148,8 @@ export class SceneController {
   private readonly resizeObserver: ResizeObserver;
   private readonly grid: GridHelper;
   private readonly axes = new Group();
+  private readonly guides = new Group();
+  private readonly guideResources: { dispose(): void }[] = [];
   private readonly overlays = new Group();
   private readonly overlayResources: { dispose(): void }[] = [];
   private readonly axisSprites: Sprite[] = [];
@@ -148,6 +167,12 @@ export class SceneController {
   private compare: readonly [number | null, number | null] = [null, null];
   private compareLabels: readonly [string, string] = ['', ''];
   private question: QueryMarker | null = null;
+  private axisLabels: readonly [string, string, string] = ['PC1', 'PC2', 'PC3'];
+  private guideData: { readonly guides: readonly FileGuide[]; readonly options: GuideOptions } = {
+    guides: [],
+    options: { paths: false, centroids: false },
+  };
+  private labelScale = 1;
   private needsRender = true;
   private pointerInside = false;
   private pointerMoved = false;
@@ -182,8 +207,8 @@ export class SceneController {
     this.grid = new GridHelper(1.2, 12, PALETTE.gridCenter, PALETTE.grid);
     this.grid.position.y = -0.55;
     this.grid.visible = false;
-    this.scene.add(this.grid, this.axes, this.overlays);
-    this.setAxisLabels(['PC1', 'PC2', 'PC3']);
+    this.scene.add(this.grid, this.axes, this.guides, this.overlays);
+    this.setAxisLabels(this.axisLabels);
 
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointermove', this.onPointerMove);
@@ -243,6 +268,7 @@ export class SceneController {
   }
 
   setAxisLabels(labels: readonly [string, string, string]): void {
+    this.axisLabels = labels;
     this.disposeAxes();
     const directions: Vec3[] = [
       [AXIS_LENGTH, 0, 0],
@@ -255,12 +281,37 @@ export class SceneController {
     this.axisLines = new LineSegments(geometry, new LineBasicMaterial({ color: PALETTE.axis }));
     this.axes.add(this.axisLines);
     directions.forEach((direction, axis) => {
-      const sprite = createTextSprite(labels[axis] ?? '', PALETTE.axis, LABEL_HEIGHT);
+      const sprite = createTextSprite(labels[axis] ?? '', PALETTE.axis, this.labelHeight(1));
       sprite.position.set(direction[0] * 1.12, direction[1] * 1.12, direction[2] * 1.12);
       this.axes.add(sprite);
       this.axisSprites.push(sprite);
     });
     this.requestRender();
+  }
+
+  /** The reading path and the center of each file (display coordinates). */
+  setGuides(guides: readonly FileGuide[], options: GuideOptions): void {
+    this.guideData = { guides, options };
+    this.clearGuides();
+    if (options.paths) {
+      this.addPaths(guides);
+    }
+    if (options.centroids) {
+      this.addCentroids(guides);
+    }
+    this.requestRender();
+  }
+
+  /** Larger labels for the projector, or the normal size. */
+  setPresentation(presentation: boolean): void {
+    const scale = presentation ? PRESENTATION_LABEL_SCALE : 1;
+    if (scale === this.labelScale) {
+      return;
+    }
+    this.labelScale = scale;
+    this.setAxisLabels(this.axisLabels);
+    this.setGuides(this.guideData.guides, this.guideData.options);
+    this.refreshOverlays();
   }
 
   setGridVisible(visible: boolean): void {
@@ -285,10 +336,10 @@ export class SceneController {
     this.animateCamera(ORIGIN.clone(), DEFAULT_CAMERA.clone());
   }
 
-  /** The current frame as a PNG data URL. */
-  screenshot(): string {
+  /** The current frame as a PNG data URL, with a caption band (for example the projection caveat). */
+  screenshot(caption: readonly string[]): string {
     this.renderer.render(this.scene, this.camera);
-    return this.renderer.domElement.toDataURL('image/png');
+    return captionedPng(this.renderer.domElement, caption);
   }
 
   dispose(): void {
@@ -307,6 +358,7 @@ export class SceneController {
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     this.controls.removeEventListener('change', this.requestRender);
     this.controls.dispose();
+    this.clearGuides();
     this.clearOverlays();
     this.disposeAxes();
     this.disposePointMeshes();
@@ -442,6 +494,75 @@ export class SceneController {
     this.requestRender();
   }
 
+  /** One line segment between consecutive chunks of each file, in the file's color. */
+  private addPaths(guides: readonly FileGuide[]): void {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    for (const guide of guides) {
+      this.color.set(guide.color);
+      for (let start = 0; start + 6 <= guide.path.length; start += 3) {
+        vertices.push(...guide.path.subarray(start, start + 6));
+        colors.push(...this.color.toArray(), ...this.color.toArray());
+      }
+    }
+    this.addGuideLines(vertices, colors, 0.55);
+  }
+
+  /** A small cross and the file name at the center of each file. */
+  private addCentroids(guides: readonly FileGuide[]): void {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    for (const guide of guides) {
+      const [x, y, z] = guide.centroid;
+      this.color.set(guide.color);
+      for (const [dx, dy, dz] of CENTROID_CROSS) {
+        vertices.push(x - dx, y - dy, z - dz, x + dx, y + dy, z + dz);
+        colors.push(...this.color.toArray(), ...this.color.toArray());
+      }
+      const sprite = createTextSprite(guide.label, guide.color, this.labelHeight(0.75));
+      sprite.position.set(x, y + CENTROID_SIZE * 1.8, z);
+      this.guides.add(sprite);
+      this.guideResources.push({
+        dispose: () => {
+          disposeTextSprite(sprite);
+        },
+      });
+    }
+    this.addGuideLines(vertices, colors, 1);
+  }
+
+  private addGuideLines(
+    vertices: readonly number[],
+    colors: readonly number[],
+    opacity: number,
+  ): void {
+    if (vertices.length === 0) {
+      return;
+    }
+    const geometry = new BufferGeometry();
+    geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+    const material = new LineBasicMaterial({
+      vertexColors: true,
+      transparent: opacity < 1,
+      opacity,
+    });
+    this.guides.add(new LineSegments(geometry, material));
+    this.guideResources.push(geometry, material);
+  }
+
+  private clearGuides(): void {
+    this.guides.clear();
+    for (const resource of this.guideResources.splice(0)) {
+      resource.dispose();
+    }
+  }
+
+  /** Height of a label, relative to the axis labels, at the current label scale. */
+  private labelHeight(relative: number): number {
+    return LABEL_HEIGHT * relative * this.labelScale;
+  }
+
   private sphereAt(position: Vector3, radius: number, material: Material): Mesh {
     const mesh = new Mesh(this.sphere, material);
     mesh.position.copy(position);
@@ -463,7 +584,7 @@ export class SceneController {
   }
 
   private addLabel(text: string, position: Vector3): void {
-    const sprite = createTextSprite(text, PALETTE.outline, LABEL_HEIGHT * 0.8);
+    const sprite = createTextSprite(text, PALETTE.outline, this.labelHeight(0.8));
     sprite.position.copy(position);
     this.overlays.add(sprite);
     this.overlayResources.push({

@@ -3,8 +3,13 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/endpoints';
 import { retryDelay, shouldRetry } from '../api/retry';
 import type { Diagnostics, PointCloud } from '../api/schemas';
-import { type DisplayTransform, fitToUnitBox, toDisplayPositions } from '../lib/displayTransform';
-import { useUiStore } from '../state/uiStore';
+import {
+  type DisplayTransform,
+  fitToUnitBox,
+  flatCoordinates,
+  toDisplayPositions,
+} from '../lib/displayTransform';
+import { type ProjectionMethod, type UmapState, useUiStore } from '../state/uiStore';
 
 export const DIAGNOSTICS_POLL_MS = 10_000;
 export const DATASET_POLL_MS = 30_000;
@@ -20,6 +25,7 @@ export const queryKeys = {
   neighbors: (version: string, id: string, k: number) => ['neighbors', version, id, k] as const,
   compare: (version: string, a: string, b: string) => ['compare', version, a, b] as const,
   matches: (version: string, text: string) => ['matches', version, text] as const,
+  neighborSample: (version: string) => ['neighborSample', version] as const,
 };
 
 /** Polls every 10 s while something fails (database down, table missing…), otherwise on demand. */
@@ -68,34 +74,104 @@ export function usePoints() {
   });
 }
 
-/** Derived, shared views of a point cloud (computed once per response). */
+/** Derived, shared views of a point cloud (computed once per response and layout). */
 export interface PointCloudView {
   readonly data: PointCloud;
+  /** The projection on screen: the PCA of the backend, or the UMAP layout of the worker. */
+  readonly method: ProjectionMethod;
   readonly indexById: ReadonlyMap<string, number>;
+  /** The coordinates of the method, three per point (PCA: in the units of the vectors). */
+  readonly coordinates: Float32Array;
   readonly transform: DisplayTransform;
+  /** The coordinates fitted into the unit box of the 3D view. */
   readonly positions: Float32Array;
 }
 
-const views = new WeakMap<PointCloud, PointCloudView>();
+const indexes = new WeakMap<PointCloud, ReadonlyMap<string, number>>();
+const pcaViews = new WeakMap<PointCloud, PointCloudView>();
+const umapViews = new WeakMap<Float32Array, PointCloudView>();
 
-export function viewOf(data: PointCloud): PointCloudView {
-  let view = views.get(data);
+function indexOf(data: PointCloud): ReadonlyMap<string, number> {
+  let index = indexes.get(data);
+  if (index === undefined) {
+    index = new Map(data.points.map((point, position) => [point.id, position]));
+    indexes.set(data, index);
+  }
+  return index;
+}
+
+function buildView(
+  data: PointCloud,
+  method: ProjectionMethod,
+  coordinates: Float32Array,
+): PointCloudView {
+  const transform = fitToUnitBox(coordinates);
+  return {
+    data,
+    method,
+    indexById: indexOf(data),
+    coordinates,
+    transform,
+    positions: toDisplayPositions(transform, coordinates),
+  };
+}
+
+/** The view of {@code data}: with its UMAP layout when one is given, otherwise its PCA. */
+export function viewOf(data: PointCloud, umapLayout: Float32Array | null = null): PointCloudView {
+  if (umapLayout !== null) {
+    const cached = umapViews.get(umapLayout);
+    if (cached?.data === data) {
+      return cached;
+    }
+    const view = buildView(data, 'umap', umapLayout);
+    umapViews.set(umapLayout, view);
+    return view;
+  }
+  let view = pcaViews.get(data);
   if (view === undefined) {
-    const transform = fitToUnitBox(data.points);
-    view = {
-      data,
-      indexById: new Map(data.points.map((point, index) => [point.id, index])),
-      transform,
-      positions: toDisplayPositions(transform, data.points),
-    };
-    views.set(data, view);
+    view = buildView(data, 'pca', flatCoordinates(data.points));
+    pcaViews.set(data, view);
   }
   return view;
 }
 
+/** The UMAP layout of exactly these points, when UMAP is chosen and ready. */
+export function umapLayoutFor(
+  data: PointCloud,
+  method: ProjectionMethod,
+  umap: UmapState,
+): Float32Array | null {
+  const matches =
+    method === 'umap' &&
+    umap.status === 'done' &&
+    umap.key.datasetVersion === data.datasetVersion &&
+    umap.key.normalized === data.projection.normalized &&
+    umap.layout.length === data.points.length * 3;
+  return matches ? umap.layout : null;
+}
+
+/**
+ * The points as the 3D view shows them. While UMAP is being computed (or when it does not
+ * match the points, for example right after a new PDF), the PCA stays on screen.
+ */
 export function usePointCloudView(): PointCloudView | null {
   const data = usePoints().data;
-  return data === undefined ? null : viewOf(data);
+  const method = useUiStore((state) => state.projectionMethod);
+  const umap = useUiStore((state) => state.umap);
+  return data === undefined ? null : viewOf(data, umapLayoutFor(data, method, umap));
+}
+
+/** The real neighbors of a sample of chunks, computed once per dataset version. */
+export function useNeighborSample() {
+  const version = useDatasetVersion();
+  return useQuery({
+    queryKey: queryKeys.neighborSample(version ?? ''),
+    queryFn: ({ signal }) => api.neighborSample(signal),
+    enabled: version !== null,
+    staleTime: Infinity,
+    retry: shouldRetry,
+    retryDelay,
+  });
 }
 
 export function useChunk(id: string | null) {

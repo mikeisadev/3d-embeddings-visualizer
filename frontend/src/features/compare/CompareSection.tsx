@@ -6,7 +6,7 @@ import { type PointCloudView, useComparison, usePointCloudView } from '../../hoo
 import { it } from '../../i18n/it';
 import { toAsyncState } from '../../lib/asyncState';
 import { comparableDistance, shownShare } from '../../lib/compare';
-import { distance3d } from '../../lib/displayTransform';
+import { distanceBetween } from '../../lib/displayTransform';
 import { formatNumber } from '../../lib/format';
 import { type CompareSlot, useUiStore } from '../../state/uiStore';
 import styles from './CompareSection.module.css';
@@ -96,9 +96,8 @@ function ComparisonView({
   readonly comparison: Comparison;
   readonly view: PointCloudView | null;
 }) {
-  const a = pointOf(view, comparison.a);
-  const b = pointOf(view, comparison.b);
-  const projected = a !== undefined && b !== undefined ? distance3d(a, b) : null;
+  const umap = view?.method === 'umap';
+  const projected = umap ? null : projectedDistance(view, comparison.a, comparison.b);
   const normalized = view?.data.projection.normalized ?? true;
   const real = comparableDistance(comparison, normalized);
   const share = projected === null ? null : shownShare(projected, real);
@@ -122,20 +121,35 @@ function ComparisonView({
         </div>
         <div>
           <h3 className={ui.subheading}>{it.compare.projected}</h3>
-          <dl className={ui.facts}>
-            <dt>{it.compare.distance3d}</dt>
-            <dd className={styles.big}>{format(projected)}</dd>
-          </dl>
+          {umap ? (
+            <p className={ui.muted}>{it.compare.umapDistance}</p>
+          ) : (
+            <dl className={ui.facts}>
+              <dt>{it.compare.distance3d}</dt>
+              <dd className={styles.big}>{format(projected)}</dd>
+            </dl>
+          )}
         </div>
       </div>
-      {projected === null ? (
-        <p className={ui.warningNote}>{it.compare.notInView}</p>
-      ) : (
-        share !== null && <p>{it.compare.shownShare(share)}</p>
-      )}
+      {!umap &&
+        (projected === null ? (
+          <p className={ui.warningNote}>{it.compare.notInView}</p>
+        ) : (
+          share !== null && <p>{it.compare.shownShare(share)}</p>
+        ))}
       <p className={ui.note}>{it.compare.why}</p>
     </div>
   );
+}
+
+/** Distance of the two chunks in the PCA coordinates (the units of the vectors), when both are on screen. */
+function projectedDistance(view: PointCloudView | null, a: string, b: string): number | null {
+  const indexA = view?.indexById.get(a);
+  const indexB = view?.indexById.get(b);
+  if (view === null || indexA === undefined || indexB === undefined) {
+    return null;
+  }
+  return distanceBetween(view.coordinates, indexA, indexB);
 }
 
 function pointOf(view: PointCloudView | null, id: string): Point | undefined {

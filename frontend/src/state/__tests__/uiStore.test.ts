@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useUiStore } from '../uiStore';
+import { ApiError } from '../../api/ApiError';
+import { sameLayoutKey, useUiStore } from '../uiStore';
 
 const initial = useUiStore.getState();
 
@@ -39,5 +40,23 @@ describe('uiStore', () => {
     useUiStore.getState().resetFilters();
     expect(useUiStore.getState().filters).toEqual({ files: null, pages: { from: null, to: null } });
     expect(useUiStore.getState().textQuery).toBe('');
+  });
+
+  it('starts UMAP again on "Riprova" and keeps the guides switches', () => {
+    const key = { datasetVersion: 'v1', normalized: true };
+    useUiStore.getState().setUmap({
+      status: 'error',
+      key,
+      error: new ApiError({ code: 'UMAP_FAILED', status: null, requestId: null }),
+    });
+
+    useUiStore.getState().retryUmap();
+    useUiStore.getState().setShowPaths(true);
+
+    expect(useUiStore.getState().umap).toEqual({ status: 'idle' });
+    expect(useUiStore.getState().umapAttempt).toBe(1);
+    expect(useUiStore.getState().showPaths).toBe(true);
+    expect(sameLayoutKey(key, { ...key })).toBe(true);
+    expect(sameLayoutKey(key, { ...key, normalized: false })).toBe(false);
   });
 });

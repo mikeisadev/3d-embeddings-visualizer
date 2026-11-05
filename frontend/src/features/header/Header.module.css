@@ -41,8 +41,33 @@
   text-overflow: ellipsis;
 }
 
+.side {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.presentation {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.presentation[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
 .dataset {
+  overflow: hidden;
   margin: 0;
+  text-overflow: ellipsis;
   font-family: var(--font-mono);
   font-size: 0.9em;
   white-space: nowrap;

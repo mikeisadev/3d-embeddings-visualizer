@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, isEnvironmentError } from '../../api/ApiError';
 import { retryDelay, shouldRetry } from '../../api/retry';
 import { toAsyncState } from '../asyncState';
+import { screenshotFileName } from '../download';
 import { describeCode, describeError } from '../errorMessages';
 import { formatNumber, formatPercent, formatValue } from '../format';
 import { GUIDE_SEEN_KEY, readFlag, writeFlag } from '../storage';
@@ -100,5 +101,18 @@ describe('storage', () => {
       writeFlag(GUIDE_SEEN_KEY, true);
     }).not.toThrow();
     expect(readFlag(GUIDE_SEEN_KEY)).toBe(false);
+  });
+});
+
+describe('screenshotFileName', () => {
+  it('says what the image shows, with safe characters only', () => {
+    const date = new Date(2026, 10, 5, 9, 7);
+
+    expect(screenshotFileName('public.vector_store', 'umap', date)).toBe(
+      'embedding-explorer_public.vector_store_umap_2026-11-05_0907.png',
+    );
+    expect(screenshotFileName('a b/c', 'pca', date)).toBe(
+      'embedding-explorer_a-b-c_pca_2026-11-05_0907.png',
+    );
   });
 });

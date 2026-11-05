@@ -2,7 +2,7 @@
 
 Embedding Explorer 3D is a read-only teaching tool: one Spring Boot backend that reads the pgvector
 table of lesson L17, one React frontend that draws it in 3D. This document explains how the pieces
-fit together; [`decisions.md`](decisions.md) explains *why* (entries D1–D27).
+fit together; [`decisions.md`](decisions.md) explains *why* (entries D1–D33).
 
 ## 1. Overview
 
@@ -34,9 +34,9 @@ driver. No Spring AI and no JPA: the tool only reads rows and calls one HTTP end
 | Package | Responsibility | Main classes |
 | --- | --- | --- |
 | `config` | Validated configuration and the read-only connection pool. | `ExplorerProperties` (one `@Validated` record bound from `VIZ_*` variables; secrets masked in `toString`), `DatabaseConfig` (Hikari pool: 5 connections, `readOnlyMode=always`, `SET statement_timeout`, `initializationFailTimeout=-1`, `ApplicationName`), `SqlIdentifier` / `TableRef` (validated, quoted identifiers), `DistanceMetricSetting`. |
-| `dataset` | Reading the vector table. | `TableInspector` (catalog queries and cheap statistics), `VectorTableGuard` (pgvector installed, table exists and is readable, Spring AI columns), `SnapshotLoader` + `SnapshotRowCollector` (consistent snapshot), `DatasetService` (single-flight cache), `ChunkFields` (derived file / page / chunk index, reading order), `TextPreview`, `MetadataStatsCollector`, `VectorMatrix`, `DatasetSnapshot`, `DatasetSummary`, `ChunkRepository` / `ChunkService` (single chunks, full-text matches), `MetricResolver`, `DistanceMetric` (pgvector operators and the Spring AI SQL for each metric), `PgVectors` (vector literal). |
+| `dataset` | Reading the vector table. | `TableInspector` (catalog queries and cheap statistics), `VectorTableGuard` (pgvector installed, table exists and is readable, Spring AI columns), `SnapshotLoader` + `SnapshotRowCollector` (consistent snapshot), `DatasetService` (single-flight cache), `ChunkFields` (derived file / page / chunk index, reading order), `TextPreview`, `MetadataStatsCollector`, `VectorMatrix` (row-major `float[]`, dot products, float32 little-endian writer), `DatasetSnapshot`, `DatasetSummary`, `ChunkRepository` / `ChunkService` (single chunks, full-text matches), `MetricResolver`, `DistanceMetric` (pgvector operators and the Spring AI SQL for each metric), `PgVectors` (vector literal). |
 | `projection` | PCA and the point cloud. | `Pca` (block power iteration + Rayleigh–Ritz), `CenteredData`, `SymmetricEigen` (Jacobi), `PcaModel` (mean, components, explained variance, `project`), `PcaProjection`, `ProjectionService` (cache per version and normalize flag), `PointCloud` / `PointCloudService` (`/points`). |
-| `search` | Similarity queries. | `SimilarChunks` (the top-K SQL, written like Spring AI), `NeighborService` (exact neighbors), `CompareService`, `RagSearchService`, `SearchRequest` / `SearchResult`, `Neighbors`, `Comparison`. |
+| `search` | Similarity queries. | `SimilarChunks` (the top-K SQL, written like Spring AI), `NeighborService` (exact neighbors), `CompareService`, `RagSearchService`, `SearchRequest` / `SearchResult`, `Neighbors`, `Comparison`, `NeighborSampleService` + `ExactNeighbors` (in-memory exact neighbors of a sample, for the fidelity score). |
 | `embedding` | The optional embedding provider. | `EmbeddingClient` (interface, `requireEnabled()`), `OpenAiCompatibleEmbeddingClient` (Spring `RestClient` on the JDK `HttpClient`, 5 s connect / 20 s read), `DisabledEmbeddingClient`, `TokenBucket`, `EmbeddingRateLimiter`, `EmbeddingLiveTest`, `EmbeddingConfig`. |
 | `diagnostics` | The checklist of the "Stato" section. | `DiagnosticsService`, `DiagnosticCheck`, `DiagnosticsReport`, `CheckStatus`. |
 | `error` | Error model and traceability. | `ErrorCode`, `WarningCode`, `ExplorerException`, `DatabaseErrorTranslator`, `ApiExceptionHandler`, `RequestIdFilter`. |
@@ -106,6 +106,16 @@ the two stored vectors; cosine similarity = 1 − cosine distance. Undefined val
 7. the response includes the Spring AI SQL for the metric, for example
    `SELECT *, embedding <=> ? AS distance FROM public.vector_store WHERE embedding <=> ? < ? ORDER BY distance LIMIT ?`.
 
+**Vectors (`GET /api/v1/vectors?datasetVersion=`)** — `DatasetService.snapshotOfVersion` answers 409
+`DATASET_CHANGED` when the version is not the current one; otherwise a `StreamingResponseBody` writes the
+snapshot matrix as float32 little-endian, row-major, in the order of `/points`, with `X-Rows`,
+`X-Dimensions` and `X-Dataset-Version`. Nothing is copied: the values go through a 64 KB buffer.
+
+**Neighbor sample (`GET /api/v1/neighbors/sample?size=&k=`)** — `NeighborSampleService` picks `size`
+chunks evenly spaced in reading order and `ExactNeighbors` scans the snapshot for the `k` nearest
+chunks of each one, in parallel, with the ordering of the pgvector operator of the metric. The
+candidates are the loaded chunks, the same points the view draws.
+
 **Diagnostics (`GET /api/v1/diagnostics`)** — ten checks in a fixed order: `db.connection`,
 `db.pgvector`, `table.exists`, `table.columns`, `table.rows`, `embedding.dimensions`, `embedding.norms`,
 `table.index`, `metadata.keys`, `embedding.client`. Each one catches its own failure and returns
@@ -128,8 +138,8 @@ shares the rate limit.
 | GET | `/api/v1/chunks/{id}/neighbors?k=10` | Exact nearest neighbors (k 1–50) with distance, similarity and the SQL template. |
 | GET | `/api/v1/compare?a=&b=` | Cosine similarity and distance, euclidean distance, dot product. |
 | POST | `/api/v1/search` | RAG simulation: `{question, topK, similarityThreshold, normalize}` (defaults 5, 0.5, true). |
-| GET | `/api/v1/vectors?datasetVersion=` | Snapshot vectors as binary float32 for UMAP (optional, see PLAN.md). |
-| GET | `/api/v1/neighbors/sample?size=&k=` | True neighbors of a sample for the projection quality score (optional, see PLAN.md). |
+| GET | `/api/v1/vectors?datasetVersion=` | Snapshot vectors for the UMAP worker: `application/octet-stream`, float32 little-endian, row-major, order of `/points`; headers `X-Rows`, `X-Dimensions`, `X-Dataset-Version`; 409 `DATASET_CHANGED` for another version. |
+| GET | `/api/v1/neighbors/sample?size=200&k=10` | Real neighbors (ids) of a deterministic sample (size 10–1000, k 1–50), for the projection fidelity score. |
 
 Every parameter is validated with Bean Validation; every DTO is a Java record.
 
@@ -205,14 +215,15 @@ Vitest + Testing Library, ESLint + Prettier.
 
 | Folder | Content |
 | --- | --- |
-| `src/api` | `http.ts` (`requestJson`: `fetch` with timeout via `AbortController`, problem parsing, zod validation, request id), `ApiError.ts` (the only error type), `schemas.ts` (zod schemas and types of every response), `endpoints.ts` (typed functions), `retry.ts`. |
+| `src/api` | `http.ts` (`requestJson` and `requestBinary` on one core: `fetch` with timeout via `AbortController`, problem parsing, request id), `ApiError.ts` (the only error type), `schemas.ts` (zod schemas and types of every response), `vectors.ts` (checks and decodes the binary vectors), `endpoints.ts` (typed functions), `retry.ts`. |
 | `src/i18n` | `it.ts`: every Italian string, including a message and a hint for every error and warning code. |
-| `src/lib` | Pure, unit-tested logic: palettes, color mapping, display transform, filters, barcode grid, comparison math, error messages, async state, formatting, safe `localStorage`. |
-| `src/state` | `uiStore.ts`: selection, comparison slots, color key, hidden categories, filters, text query, preferences, notices, the RAG overlay. |
-| `src/hooks` | `queries.ts` (data hooks and query keys), `usePointStates.ts` (color mapping, visibility, filters, text matches), `useDataWatchers.ts`. |
+| `src/lib` | Pure, unit-tested logic: palettes, color mapping, display transform, filters, barcode grid, comparison math, projection fidelity, seeded random numbers, downloads, error messages, async state, formatting, safe `localStorage`. |
+| `src/umap` | The UMAP feature: `protocol.ts` (messages between page and worker), `umapLayout.ts` (pure UMAP run), `umap.worker.ts` (thin worker shell), `umapRunner.ts` (download, worker, cancel, errors), `useUmapController.ts` (keeps the layout in step with the method and the data). |
+| `src/state` | `uiStore.ts`: selection, comparison slots, color key, hidden categories, filters, text query, preferences, notices, the RAG overlay, the projection method and the UMAP job (a discriminated union: idle, loading, running, done, error). |
+| `src/hooks` | `queries.ts` (data hooks and query keys; `usePointCloudView` returns the projection on screen, UMAP when its layout matches the points, PCA otherwise), `usePointStates.ts` (color mapping, visibility, filters, text matches), `useDataWatchers.ts`, `usePresentationMode.ts`. |
 | `src/components` | Generic UI: collapsible `Section` with the "i" button, `AsyncView` (loading / empty / error with "Riprova" / success), `ErrorMessage`, `StatusIcon`. |
 | `src/features/*` | One folder per sidebar section (status, guide, projection, colors, chunk, compare, search, exercises) plus header and notices. |
-| `src/scene` | `SceneController` (three.js), `SceneView` (React shell), `SceneErrorBoundary`, `sceneModel.ts` (pure focus and dimming rules), labels, WebGL detection. |
+| `src/scene` | `SceneController` (three.js), `SceneView` (React shell), `SceneErrorBoundary`, `sceneModel.ts` (pure rules: focus and dimming, question placement, file paths and centroids), labels, captioned screenshots, WebGL detection. |
 
 Components contain no business logic: they read hooks and render; the rules live in `src/lib` and
 `src/scene/sceneModel.ts`.
@@ -254,8 +265,16 @@ Components contain no business logic: they read hooks and render; the rules live
   A–B comparison line with labels, the question marker of the RAG simulation (octahedron) with solid
   green lines to kept chunks and dashed orange lines to discarded ones, axes PC1–PC3 with the explained
   variance as constant-size sprites, optional grid.
-- **Display transform**: backend coordinates are centered on their bounding box and scaled uniformly so
-  the largest extent is 1 (`lib/displayTransform.ts`); the same transform places the question marker.
+- **Display transform**: the coordinates of the method (PCA from the backend, UMAP from the worker) are
+  centered on their bounding box and scaled uniformly so the largest extent is 1
+  (`lib/displayTransform.ts`); the same transform places the PCA question marker.
+- **Projection methods**: with UMAP the badge says "conserva i vicini, non le distanze", the axes are
+  labeled UMAP 1–3 without variance, the question marker sits at the similarity-weighted average of its
+  results (labeled approximate) and the comparison panel does not compare distances.
+- **File guides**: "Percorsi" joins the chunks of each file in reading order (one `LineSegments` with
+  vertex colors); "Centroidi" draws a small cross and the file name at the mean of the file's points.
+- **Screenshot**: a frame is rendered and copied at once onto a 2D canvas with a caption band (dataset
+  and projection caveat), then downloaded as PNG. Presentation mode enlarges the labels.
 - **Rendering on demand**: the animation loop only calls `controls.update()` and renders when the camera
   moved or something changed. Device pixel ratio capped at 2; `ResizeObserver` for the size.
 - **Resilience and hygiene**: WebGL 2 detection with an explanatory message, `webglcontextlost` handled
@@ -324,9 +343,9 @@ database (D8), so a stopped database never blocks the stack.
 
 | Layer | What | How to run |
 | --- | --- | --- |
-| Backend unit (Surefire, `*Test`) | PCA math (known axes, orthonormality, ratios, determinism, exact Jacobi comparison, performance), identifiers, properties validation, SQLSTATE translation, error responses (`@WebMvcTest`), request id filter, derived fields, metadata statistics, token bucket, embedding client against a real local HTTP server (statuses, timeout, unreachable provider, invalid bodies). | `cd backend && ./mvnw test` |
-| Backend integration (Failsafe, `*IT`, Testcontainers) | `pgvector/pgvector:0.8.7-pg17` (the demo database image): snapshot loading, sampling, dirty data, versioning, single-flight cache, diagnostics on healthy / empty / missing / wrong / mixed tables, metric detection, permission denied, points, chunks, exact neighbors beyond `ef_search`, compare, text search, RAG search, rate limit. Plain `postgres:17.11-alpine3.24`: `PGVECTOR_MISSING`. No database: the app starts and reports `DB_UNAVAILABLE`. Database stopped and restarted while the app runs: recovery without restart. | `cd backend && ./mvnw verify` (needs Docker) |
-| Frontend (Vitest + Testing Library, jsdom) | Pure modules, zod schemas, HTTP client failures, every sidebar section in loading / empty / error / success states, the RAG panel enabled and disabled, the live test, WebGL fallback and error boundary. | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test` |
+| Backend unit (Surefire, `*Test`) | PCA math (known axes, orthonormality, ratios, determinism, exact Jacobi comparison, performance), identifiers, properties validation, SQLSTATE translation, error responses (`@WebMvcTest`), request id filter, derived fields, metadata statistics, token bucket, embedding client against a real local HTTP server (statuses, timeout, unreachable provider, invalid bodies), float32 export, in-memory exact neighbors for every metric. | `cd backend && ./mvnw test` |
+| Backend integration (Failsafe, `*IT`, Testcontainers) | `pgvector/pgvector:0.8.7-pg17` (the demo database image): snapshot loading, sampling, dirty data, versioning, single-flight cache, diagnostics on healthy / empty / missing / wrong / mixed tables, metric detection, permission denied, points, chunks, exact neighbors beyond `ef_search`, compare, text search, RAG search, rate limit, streamed vectors aligned with `/points`, the neighbor sample equal to the exact database query. Plain `postgres:17.11-alpine3.24`: `PGVECTOR_MISSING`. No database: the app starts and reports `DB_UNAVAILABLE`. Database stopped and restarted while the app runs: recovery without restart. | `cd backend && ./mvnw verify` (needs Docker) |
+| Frontend (Vitest + Testing Library, jsdom) | Pure modules, zod schemas, HTTP client failures, binary vectors, every sidebar section in loading / empty / error / success states, the RAG panel enabled and disabled, the live test, WebGL fallback and error boundary, UMAP (real umap-js on small data: shape, clusters, determinism, normalization), the runner with a fake worker, the UMAP controller, fidelity, question placement, file guides, presentation mode. | `cd frontend && npm ci && npm run typecheck && npm run lint && npm test` |
 
 The frontend Docker image runs the type check, the lint and the tests during the build (D24);
 `scripts/smoke-test.sh` checks a running stack through nginx.

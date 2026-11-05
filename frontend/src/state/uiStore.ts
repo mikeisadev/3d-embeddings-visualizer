@@ -1,6 +1,8 @@
 import { create } from 'zustand';
+import type { ApiError } from '../api/ApiError';
 import { type ColorKey, DEFAULT_COLOR_KEY } from '../lib/colorBy';
 import { type Filters, NO_FILTERS, type PageRange } from '../lib/filters';
+import type { UmapProgress } from '../umap/protocol';
 
 export type CompareSlot = 'A' | 'B';
 
@@ -11,8 +13,35 @@ export interface RagOverlay {
   readonly datasetVersion: string;
   readonly normalized: boolean;
   readonly queryPoint: { readonly x: number; readonly y: number; readonly z: number };
-  readonly results: readonly { readonly id: string; readonly passes: boolean }[];
+  readonly results: readonly {
+    readonly id: string;
+    readonly passes: boolean;
+    readonly similarity: number | null;
+  }[];
 }
+
+/** PCA comes from the backend; UMAP is computed in the browser on request. */
+export type ProjectionMethod = 'pca' | 'umap';
+
+/** The data a UMAP layout belongs to: the same rows, prepared the same way. */
+export interface LayoutKey {
+  readonly datasetVersion: string;
+  readonly normalized: boolean;
+}
+
+export function sameLayoutKey(a: LayoutKey, b: LayoutKey): boolean {
+  return a.datasetVersion === b.datasetVersion && a.normalized === b.normalized;
+}
+
+/** The UMAP computation: download, then the worker, then a layout or an error. */
+export type UmapState =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading'; readonly key: LayoutKey }
+  | { readonly status: 'running'; readonly key: LayoutKey; readonly progress: UmapProgress }
+  | { readonly status: 'done'; readonly key: LayoutKey; readonly layout: Float32Array }
+  | { readonly status: 'error'; readonly key: LayoutKey; readonly error: ApiError };
+
+const UMAP_IDLE: UmapState = { status: 'idle' };
 
 export const DEFAULT_NEIGHBORS_K = 10;
 export const DEFAULT_POINT_SIZE = 1;
@@ -33,6 +62,14 @@ export interface UiState {
   readonly pointSize: number;
   readonly neighborsK: number;
   readonly showGrid: boolean;
+  /** Lines joining the chunks of each file in reading order. */
+  readonly showPaths: boolean;
+  /** The center of each file, with its name. */
+  readonly showCentroids: boolean;
+  readonly projectionMethod: ProjectionMethod;
+  readonly umap: UmapState;
+  /** Incremented by "Riprova": starts the UMAP computation again for the same data. */
+  readonly umapAttempt: number;
   /** Asks the 3D view to frame a chunk ("Mostra nel grafico"); the nonce repeats the request. */
   readonly focusRequest: { readonly id: string; readonly nonce: number } | null;
   readonly presentation: boolean;
@@ -53,6 +90,11 @@ export interface UiState {
   readonly setPointSize: (size: number) => void;
   readonly setNeighborsK: (k: number) => void;
   readonly setShowGrid: (show: boolean) => void;
+  readonly setShowPaths: (show: boolean) => void;
+  readonly setShowCentroids: (show: boolean) => void;
+  readonly setProjectionMethod: (method: ProjectionMethod) => void;
+  readonly setUmap: (state: UmapState) => void;
+  readonly retryUmap: () => void;
   readonly focusOn: (id: string) => void;
   readonly setPresentation: (presentation: boolean) => void;
   readonly setNotice: (notice: Notice | null) => void;
@@ -71,6 +113,11 @@ export const useUiStore = create<UiState>()((set) => ({
   pointSize: DEFAULT_POINT_SIZE,
   neighborsK: DEFAULT_NEIGHBORS_K,
   showGrid: false,
+  showPaths: false,
+  showCentroids: false,
+  projectionMethod: 'pca',
+  umap: UMAP_IDLE,
+  umapAttempt: 0,
   focusRequest: null,
   presentation: false,
   notice: null,
@@ -121,6 +168,21 @@ export const useUiStore = create<UiState>()((set) => ({
   },
   setShowGrid: (show) => {
     set({ showGrid: show });
+  },
+  setShowPaths: (show) => {
+    set({ showPaths: show });
+  },
+  setShowCentroids: (show) => {
+    set({ showCentroids: show });
+  },
+  setProjectionMethod: (method) => {
+    set({ projectionMethod: method });
+  },
+  setUmap: (state) => {
+    set({ umap: state });
+  },
+  retryUmap: () => {
+    set((state) => ({ umap: UMAP_IDLE, umapAttempt: state.umapAttempt + 1 }));
   },
   focusOn: (id) => {
     set((state) => ({ focusRequest: { id, nonce: (state.focusRequest?.nonce ?? 0) + 1 } }));

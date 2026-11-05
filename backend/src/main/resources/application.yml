@@ -29,6 +29,11 @@ spring:
     # Technical messages (validation details) stay in English whatever the browser language.
     locale: en
     locale-resolver: fixed
+  mvc:
+    async:
+      # GET /api/v1/vectors is streamed asynchronously: tens of megabytes over a slow classroom
+      # Wi-Fi must not hit the 30 s default of the servlet container.
+      request-timeout: 120s
 
 server:
   port: 8080

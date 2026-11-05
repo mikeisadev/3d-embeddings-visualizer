@@ -3,9 +3,11 @@ import { barcodeColor, barcodeGrid, symmetricRange } from '../barcode';
 import { comparableDistance, shownShare } from '../compare';
 import {
   applyTransform,
-  distance3d,
+  distanceBetween,
   fitToUnitBox,
+  flatCoordinates,
   IDENTITY,
+  pointAt,
   toDisplayPositions,
 } from '../displayTransform';
 import { passesFilters } from '../filters';
@@ -13,24 +15,30 @@ import { comparison, points } from '../../test/fixtures';
 
 describe('displayTransform', () => {
   it('centers the points and scales the largest extent to 1', () => {
-    const transform = fitToUnitBox([
+    const coordinates = flatCoordinates([
       { x: 10, y: 0, z: 0 },
       { x: 14, y: 2, z: 1 },
     ]);
+    const transform = fitToUnitBox(coordinates);
     expect(transform.center).toEqual([12, 1, 0.5]);
     expect(transform.scale).toBeCloseTo(0.25);
     expect(applyTransform(transform, { x: 14, y: 2, z: 1 })).toEqual([0.5, 0.25, 0.125]);
+    expect(Array.from(toDisplayPositions(transform, coordinates))).toEqual([
+      -0.5, -0.25, -0.125, 0.5, 0.25, 0.125,
+    ]);
   });
 
   it('uses one scale for all axes and survives degenerate input', () => {
-    expect(fitToUnitBox([])).toBe(IDENTITY);
-    expect(fitToUnitBox([{ x: 3, y: 3, z: 3 }]).scale).toBe(1);
-    const positions = toDisplayPositions(IDENTITY, [{ x: 1, y: 2, z: 3 }]);
+    expect(fitToUnitBox(new Float32Array(0))).toBe(IDENTITY);
+    expect(fitToUnitBox(new Float32Array([3, 3, 3])).scale).toBe(1);
+    const positions = toDisplayPositions(IDENTITY, new Float32Array([1, 2, 3]));
     expect(Array.from(positions)).toEqual([1, 2, 3]);
   });
 
-  it('measures distances in the projected coordinates', () => {
-    expect(distance3d({ x: 0, y: 0, z: 0 }, { x: 1, y: 2, z: 2 })).toBe(3);
+  it('reads points and distances from flat coordinates', () => {
+    const coordinates = new Float32Array([0, 0, 0, 1, 2, 2]);
+    expect(pointAt(coordinates, 1)).toEqual({ x: 1, y: 2, z: 2 });
+    expect(distanceBetween(coordinates, 0, 1)).toBe(3);
   });
 });
 

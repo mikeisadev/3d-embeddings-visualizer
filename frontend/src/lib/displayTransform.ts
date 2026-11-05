@@ -1,7 +1,8 @@
 /**
- * Fits the backend coordinates into a unit-sized box centered on the origin, with one uniform
- * scale (a different scale per axis would distort the projection). The same transform is
- * applied to the question marker of the RAG simulation.
+ * Fits the projected coordinates (PCA from the backend or UMAP from the worker) into a
+ * unit-sized box centered on the origin, with one uniform scale: a different scale per axis
+ * would distort the projection. The same transform places the question marker of the RAG
+ * simulation. Coordinates are flat arrays, three values (x, y, z) per point.
  */
 
 export type Vec3 = readonly [number, number, number];
@@ -19,24 +20,31 @@ export interface DisplayTransform {
 
 export const IDENTITY: DisplayTransform = { center: [0, 0, 0], scale: 1 };
 
-export function fitToUnitBox(points: readonly Coordinates[]): DisplayTransform {
-  if (points.length === 0) {
+/** The x, y, z of every point as a flat array. */
+export function flatCoordinates(points: readonly Coordinates[]): Float32Array {
+  const coordinates = new Float32Array(points.length * 3);
+  points.forEach(({ x, y, z }, index) => {
+    coordinates[index * 3] = x;
+    coordinates[index * 3 + 1] = y;
+    coordinates[index * 3 + 2] = z;
+  });
+  return coordinates;
+}
+
+export function fitToUnitBox(coordinates: Float32Array): DisplayTransform {
+  if (coordinates.length < 3) {
     return IDENTITY;
   }
-  let minX = Infinity;
-  let minY = Infinity;
-  let minZ = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  let maxZ = -Infinity;
-  for (const { x, y, z } of points) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    minZ = Math.min(minZ, z);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
-    maxZ = Math.max(maxZ, z);
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (let index = 0; index < coordinates.length; index++) {
+    const axis = index % 3;
+    const value = coordinates[index] ?? 0;
+    min[axis] = Math.min(min[axis] ?? Infinity, value);
+    max[axis] = Math.max(max[axis] ?? -Infinity, value);
   }
+  const [minX = 0, minY = 0, minZ = 0] = min;
+  const [maxX = 0, maxY = 0, maxZ = 0] = max;
   const center: Vec3 = [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2];
   const largestRange = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
   return { center, scale: largestRange > 0 ? 1 / largestRange : 1 };
@@ -50,19 +58,32 @@ export function applyTransform(transform: DisplayTransform, point: Coordinates):
   ];
 }
 
-/** All the points as a flat array (x, y, z per point), ready for the 3D buffers. */
+/** All the points in display coordinates, ready for the 3D buffers. */
 export function toDisplayPositions(
   transform: DisplayTransform,
-  points: readonly Coordinates[],
+  coordinates: Float32Array,
 ): Float32Array {
-  const positions = new Float32Array(points.length * 3);
-  points.forEach((point, index) => {
-    positions.set(applyTransform(transform, point), index * 3);
-  });
+  const positions = new Float32Array(coordinates.length);
+  for (let index = 0; index < coordinates.length; index++) {
+    const axis = index % 3;
+    positions[index] =
+      ((coordinates[index] ?? 0) - (transform.center[axis] ?? 0)) * transform.scale;
+  }
   return positions;
 }
 
-/** Euclidean distance between two points in the projected (backend) coordinates. */
-export function distance3d(a: Coordinates, b: Coordinates): number {
-  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+/** Point {@code index} of a flat coordinate array. */
+export function pointAt(coordinates: Float32Array, index: number): Coordinates {
+  return {
+    x: coordinates[index * 3] ?? 0,
+    y: coordinates[index * 3 + 1] ?? 0,
+    z: coordinates[index * 3 + 2] ?? 0,
+  };
+}
+
+/** Euclidean distance between two points of a flat coordinate array. */
+export function distanceBetween(coordinates: Float32Array, a: number, b: number): number {
+  const p = pointAt(coordinates, a);
+  const q = pointAt(coordinates, b);
+  return Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
 }

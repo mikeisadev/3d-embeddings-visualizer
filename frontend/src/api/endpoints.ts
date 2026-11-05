@@ -1,4 +1,4 @@
-import { requestJson } from './http';
+import { requestBinary, requestJson } from './http';
 import {
   chunkMatchesSchema,
   chunkSchema,
@@ -6,11 +6,13 @@ import {
   datasetSchema,
   diagnosticsSchema,
   embeddingTestSchema,
+  neighborSampleSchema,
   neighborsSchema,
   pointsSchema,
   type SearchRequest,
   searchResultSchema,
 } from './schemas';
+import { decodeVectorBlock, type VectorBlock } from './vectors';
 
 const BASE = '/api/v1';
 
@@ -19,6 +21,9 @@ const SLOW_TIMEOUT_MS = 60_000;
 
 /** An embedding call plus the database query; a cold local model can be slow. */
 const SEARCH_TIMEOUT_MS = 45_000;
+
+/** Up to tens of megabytes of vectors, possibly over a slow classroom network. */
+const VECTORS_TIMEOUT_MS = 120_000;
 
 /** Typed functions for every backend endpoint. */
 export const api = {
@@ -61,6 +66,21 @@ export const api = {
         signal,
       },
     ),
+
+  /** The raw vectors for the UMAP worker; 409 DATASET_CHANGED when the version is old. */
+  vectors: async (datasetVersion: string, signal?: AbortSignal): Promise<VectorBlock> =>
+    decodeVectorBlock(
+      await requestBinary(`${BASE}/vectors?${new URLSearchParams({ datasetVersion }).toString()}`, {
+        signal,
+        timeoutMs: VECTORS_TIMEOUT_MS,
+      }),
+    ),
+
+  neighborSample: (signal?: AbortSignal) =>
+    requestJson(`${BASE}/neighbors/sample`, neighborSampleSchema, {
+      signal,
+      timeoutMs: SLOW_TIMEOUT_MS,
+    }),
 
   /** POST, never retried automatically: it calls a (possibly paid) embedding provider. */
   search: (request: SearchRequest) =>

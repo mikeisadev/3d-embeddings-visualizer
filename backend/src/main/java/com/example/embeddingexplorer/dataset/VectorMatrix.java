@@ -1,5 +1,10 @@
 package com.example.embeddingexplorer.dataset;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
 import java.util.Arrays;
 
 /**
@@ -7,6 +12,9 @@ import java.util.Arrays;
  * {@code float[]}: 5,000 × 1,536 floats take about 30 MB, without per-row object overhead.
  */
 public final class VectorMatrix {
+
+    /** Values written per chunk by {@link #writeLittleEndian}: a 64 KB buffer. */
+    private static final int WRITE_CHUNK_VALUES = 16_384;
 
     private final int rows;
     private final int dimensions;
@@ -66,9 +74,48 @@ public final class VectorMatrix {
         }
     }
 
+    /** Dot product of two rows, accumulated in double. */
+    public double dot(int rowA, int rowB) {
+        int a = offset(rowA);
+        int b = offset(rowB);
+        double sum = 0;
+        for (int column = 0; column < dimensions; column++) {
+            sum += (double) data[a + column] * data[b + column];
+        }
+        return sum;
+    }
+
+    /** Squared euclidean distance between two rows, accumulated in double. */
+    public double squaredDistance(int rowA, int rowB) {
+        int a = offset(rowA);
+        int b = offset(rowB);
+        double sum = 0;
+        for (int column = 0; column < dimensions; column++) {
+            double difference = (double) data[a + column] - data[b + column];
+            sum += difference * difference;
+        }
+        return sum;
+    }
+
     /** Size of the values in bytes. */
     public long byteSize() {
         return (long) data.length * Float.BYTES;
+    }
+
+    /**
+     * Writes every value, row by row, as IEEE 754 float32 in little-endian order: the memory
+     * layout of a JavaScript {@code Float32Array} on every common platform. The values are
+     * copied through a small buffer, so the matrix is never duplicated in memory.
+     */
+    public void writeLittleEndian(OutputStream out) throws IOException {
+        ByteBuffer bytes = ByteBuffer.allocate(WRITE_CHUNK_VALUES * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+        FloatBuffer values = bytes.asFloatBuffer();
+        for (int start = 0; start < data.length; start += WRITE_CHUNK_VALUES) {
+            int count = Math.min(WRITE_CHUNK_VALUES, data.length - start);
+            values.clear();
+            values.put(data, start, count);
+            out.write(bytes.array(), 0, count * Float.BYTES);
+        }
     }
 
     private int offset(int row) {

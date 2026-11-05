@@ -2,6 +2,9 @@ package com.example.embeddingexplorer.dataset;
 
 import com.example.embeddingexplorer.config.ExplorerProperties;
 import com.example.embeddingexplorer.config.TableRef;
+import com.example.embeddingexplorer.error.ErrorCode;
+import com.example.embeddingexplorer.error.ExplorerException;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,6 +74,23 @@ public class DatasetService {
         } finally {
             loadLock.unlock();
         }
+    }
+
+    /**
+     * The current snapshot, only if it is still the version the client expects. Data that must
+     * line up with what the client already has (for example the raw vectors, row by row with
+     * the points on screen) fails with {@code DATASET_CHANGED} instead of silently mixing two
+     * versions of the table.
+     */
+    public DatasetSnapshot snapshotOfVersion(String expectedVersion) {
+        DatasetSnapshot snapshot = currentSnapshot();
+        if (!snapshot.version().equals(expectedVersion)) {
+            throw new ExplorerException(
+                    ErrorCode.DATASET_CHANGED,
+                    "The dataset changed: the current version is " + snapshot.version() + ".",
+                    Map.of("currentVersion", snapshot.version()));
+        }
+        return snapshot;
     }
 
     public DatasetSummary summary() {

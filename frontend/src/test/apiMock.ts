@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 /** What a mocked endpoint answers. */
 export type MockReply =
   | { readonly json: unknown; readonly status?: number }
+  | { readonly binary: ArrayBuffer; readonly headers: Readonly<Record<string, string>> }
   | { readonly text: string; readonly status: number }
   | { readonly pending: true }
   | { readonly networkError: true };
@@ -35,6 +36,14 @@ function reply(mock: MockReply): Promise<Response> {
   }
   if ('networkError' in mock) {
     return Promise.reject(new TypeError('Failed to fetch'));
+  }
+  if ('binary' in mock) {
+    return Promise.resolve(
+      new Response(mock.binary, {
+        status: 200,
+        headers: { 'Content-Type': 'application/octet-stream', ...mock.headers },
+      }),
+    );
   }
   if ('text' in mock) {
     return Promise.resolve(

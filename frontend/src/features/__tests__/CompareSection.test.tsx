@@ -75,4 +75,30 @@ describe('CompareSection', () => {
     expect(screen.getByText(t.compare.shownShare(0.6))).toBeInTheDocument();
     expect(screen.getByText(t.compare.why)).toBeInTheDocument();
   });
+
+  it('does not compare distances on a UMAP picture', async () => {
+    mockApi([
+      ['/api/v1/dataset', { json: dataset }],
+      ['/api/v1/points', { json: points }],
+      [/^\/api\/v1\/compare/, { json: comparison }],
+    ]);
+    renderWithProviders(<CompareSection />);
+    pick('a', 'c');
+    await screen.findByText(t.compare.distance3d);
+
+    act(() => {
+      useUiStore.setState({
+        projectionMethod: 'umap',
+        umap: {
+          status: 'done',
+          key: { datasetVersion: points.datasetVersion, normalized: true },
+          layout: new Float32Array(points.points.length * 3),
+        },
+      });
+    });
+
+    expect(screen.getByText(t.compare.umapDistance)).toBeInTheDocument();
+    expect(screen.queryByText(t.compare.distance3d)).not.toBeInTheDocument();
+    expect(screen.queryByText(/della distanza vera/)).not.toBeInTheDocument();
+  });
 });

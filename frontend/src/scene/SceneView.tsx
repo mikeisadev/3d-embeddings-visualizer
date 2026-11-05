@@ -1,18 +1,14 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { ErrorMessage } from '../components/ErrorMessage';
 import ui from '../components/ui.module.css';
-import { useNeighbors, usePointCloudView, usePoints } from '../hooks/queries';
-import { useColorMapping, usePointStates } from '../hooks/usePointStates';
+import { useDataset, useNeighbors, usePointCloudView, usePoints } from '../hooks/queries';
+import { colorMappingOf, useColorMapping, usePointStates } from '../hooks/usePointStates';
 import { it } from '../i18n/it';
+import { downloadUrl, screenshotFileName } from '../lib/download';
 import { useUiStore } from '../state/uiStore';
-import { applyTransform } from '../lib/displayTransform';
-import {
-  type PointAppearance,
-  type QueryLink,
-  type QueryMarker,
-  SceneController,
-} from './SceneController';
-import { computeEmphasis, focusSet } from './sceneModel';
+import { progressShare } from '../umap/progress';
+import { type PointAppearance, type QueryMarker, SceneController } from './SceneController';
+import { computeEmphasis, fileGuides, focusSet, placeQuestion } from './sceneModel';
 import styles from './SceneView.module.css';
 import { isWebGl2Available } from './webgl';
 
@@ -52,6 +48,7 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
   const [contextLost, setContextLost] = useState(false);
 
   const points = usePoints();
+  const dataset = useDataset().data;
   const view = usePointCloudView();
   const mapping = useColorMapping();
   const states = usePointStates();
@@ -61,10 +58,23 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
   const pointSize = useUiStore((state) => state.pointSize);
   const showGrid = useUiStore((state) => state.showGrid);
   const setShowGrid = useUiStore((state) => state.setShowGrid);
+  const showPaths = useUiStore((state) => state.showPaths);
+  const setShowPaths = useUiStore((state) => state.setShowPaths);
+  const showCentroids = useUiStore((state) => state.showCentroids);
+  const setShowCentroids = useUiStore((state) => state.setShowCentroids);
   const focusRequest = useUiStore((state) => state.focusRequest);
   const select = useUiStore((state) => state.select);
   const ragOverlay = useUiStore((state) => state.ragOverlay);
+  const projectionMethod = useUiStore((state) => state.projectionMethod);
+  const setProjectionMethod = useUiStore((state) => state.setProjectionMethod);
+  const umap = useUiStore((state) => state.umap);
+  const presentation = useUiStore((state) => state.presentation);
   const neighbors = useNeighbors(selectedId);
+
+  const method = view?.method ?? 'pca';
+  const badge = method === 'umap' ? it.scene.projectionBadgeUmap : it.scene.projectionBadge;
+  const umapRunning =
+    projectionMethod === 'umap' && (umap.status === 'loading' || umap.status === 'running');
 
   const indexOf = (id: string | null) =>
     id === null || view === null ? null : (view.indexById.get(id) ?? null);
@@ -79,25 +89,30 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
       .filter((index): index is number => index !== undefined);
   }, [neighborData, selectedId, view]);
 
-  /** The last RAG search, only when it belongs to the points on screen (same data, same projection). */
+  /** The last RAG search, only when it belongs to the points on screen. */
   const rag = useMemo(() => {
-    if (ragOverlay === null || view === null) {
+    const placement = placeQuestion(
+      ragOverlay,
+      view === null
+        ? null
+        : {
+            method: view.method,
+            datasetVersion: view.data.datasetVersion,
+            normalized: view.data.projection.normalized,
+            indexById: view.indexById,
+            transform: view.transform,
+            positions: view.positions,
+          },
+    );
+    if (placement === null) {
       return null;
     }
-    const sameData = ragOverlay.datasetVersion === view.data.datasetVersion;
-    if (!sameData || ragOverlay.normalized !== view.data.projection.normalized) {
-      return null;
-    }
-    const links: QueryLink[] = ragOverlay.results.flatMap((result) => {
-      const index = view.indexById.get(result.id);
-      return index === undefined ? [] : [{ index, passes: result.passes }];
-    });
     const marker: QueryMarker = {
-      position: applyTransform(view.transform, ragOverlay.queryPoint),
-      label: it.rag.questionMarker,
-      links,
+      position: placement.position,
+      label: placement.approximate ? it.rag.approximateMarker : it.rag.questionMarker,
+      links: placement.links,
     };
-    return { marker, indices: links.map((link) => link.index) };
+    return { marker, indices: placement.links.map((link) => link.index) };
   }, [ragOverlay, view]);
 
   const appearance = useMemo<PointAppearance | null>(() => {
@@ -117,6 +132,24 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
       pointSize,
     };
   }, [mapping, states, selectedIndex, neighborIndices, rag, pointSize]);
+
+  const guides = useMemo(() => {
+    if (view === null || states === null || (!showPaths && !showCentroids)) {
+      return [];
+    }
+    const legend = colorMappingOf(view.data, 'field:file').legend;
+    const fileColors = new Map(
+      legend.kind === 'categorical'
+        ? legend.categories.map((category) => [category.id, category.color])
+        : [],
+    );
+    return fileGuides(
+      view.data.points.map((point) => point.file),
+      states.visible,
+      view.positions,
+      (file) => fileColors.get(file) ?? '#9fb0c0',
+    );
+  }, [view, states, showPaths, showCentroids]);
 
   const onSelectPoint = useEffectEvent((index: number | null) => {
     select(index === null || view === null ? null : (view.data.points[index]?.id ?? null));
@@ -188,6 +221,10 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
     controllerRef.current?.setQueryMarker(rag?.marker ?? null);
   }, [rag]);
 
+  useEffect(() => {
+    controllerRef.current?.setGuides(guides, { paths: showPaths, centroids: showCentroids });
+  }, [guides, showPaths, showCentroids]);
+
   // Frame each new question once; reloading the points keeps the camera where it is.
   const focusQuestion = useEffectEvent(() => {
     if (rag !== null) {
@@ -203,12 +240,10 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
   const ratios = view?.data.projection.explainedVarianceRatio;
   const axisLabels = useMemo(
     () =>
-      [0, 1, 2].map((axis) => it.scene.axis(axis, ratios?.[axis] ?? null)) as [
-        string,
-        string,
-        string,
-      ],
-    [ratios],
+      [0, 1, 2].map((axis) =>
+        method === 'umap' ? it.scene.axisUmap(axis) : it.scene.axis(axis, ratios?.[axis] ?? null),
+      ) as [string, string, string],
+    [method, ratios],
   );
   useEffect(() => {
     controllerRef.current?.setAxisLabels(axisLabels);
@@ -219,10 +254,28 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
   }, [showGrid]);
 
   useEffect(() => {
+    controllerRef.current?.setPresentation(presentation);
+  }, [presentation]);
+
+  useEffect(() => {
     if (focusRequest !== null) {
       onFocusRequest(focusRequest.id);
     }
   }, [focusRequest]);
+
+  const saveImage = () => {
+    const controller = controllerRef.current;
+    if (controller === null) {
+      return;
+    }
+    const table = dataset === undefined ? 'dataset' : `${dataset.schema}.${dataset.table}`;
+    const caption = [
+      dataset === undefined
+        ? badge
+        : `${it.header.dataset(table, dataset.rowsWithEmbedding, dataset.dimensions)} · ${badge}`,
+    ];
+    downloadUrl(controller.screenshot(caption), screenshotFileName(table, method, new Date()));
+  };
 
   const hovered = hover === null ? undefined : view?.data.points[hover.index];
 
@@ -240,19 +293,49 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
         >
           {it.scene.resetView}
         </button>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={showGrid}
-            onChange={(event) => {
-              setShowGrid(event.target.checked);
-            }}
-          />
-          {it.scene.grid}
-        </label>
+        <SceneToggle label={it.scene.grid} checked={showGrid} onChange={setShowGrid} />
+        <SceneToggle
+          label={it.scene.paths}
+          title={it.scene.pathsHint}
+          checked={showPaths}
+          onChange={setShowPaths}
+        />
+        <SceneToggle
+          label={it.scene.centroids}
+          title={it.scene.centroidsHint}
+          checked={showCentroids}
+          onChange={setShowCentroids}
+        />
+        <button
+          type="button"
+          className={ui.button}
+          title={it.scene.screenshotHint}
+          disabled={view === null}
+          onClick={saveImage}
+        >
+          {it.scene.screenshot}
+        </button>
       </div>
 
-      <p className={styles.badge}>{it.scene.projectionBadge}</p>
+      <div className={styles.status}>
+        {points.isPlaceholderData && <p className={styles.pill}>{it.scene.reloadingPoints}</p>}
+        {umapRunning && (
+          <p className={styles.pill} role="status">
+            {it.scene.umapRunning(progressShare(umap))}{' '}
+            <button
+              type="button"
+              className={styles.pillButton}
+              onClick={() => {
+                setProjectionMethod('pca');
+              }}
+            >
+              {it.projection.umapCancel}
+            </button>
+          </p>
+        )}
+      </div>
+
+      <p className={styles.badge}>{badge}</p>
       <p className={styles.help}>{it.scene.help}</p>
 
       {points.isPending && points.fetchStatus !== 'idle' && (
@@ -260,7 +343,6 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
           {it.scene.loadingPoints}
         </div>
       )}
-      {points.isPlaceholderData && <p className={styles.reloading}>{it.scene.reloadingPoints}</p>}
       {points.isError && (
         <div className={styles.overlay}>
           <ErrorMessage
@@ -294,5 +376,27 @@ function SceneCanvas({ onReload }: { readonly onReload: () => void }) {
         </div>
       )}
     </div>
+  );
+}
+
+interface SceneToggleProps {
+  readonly label: string;
+  readonly title?: string;
+  readonly checked: boolean;
+  readonly onChange: (checked: boolean) => void;
+}
+
+function SceneToggle({ label, title, checked, onChange }: SceneToggleProps) {
+  return (
+    <label className={styles.toggle} title={title}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => {
+          onChange(event.target.checked);
+        }}
+      />
+      {label}
+    </label>
   );
 }

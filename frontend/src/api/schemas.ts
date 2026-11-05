@@ -180,6 +180,15 @@ export const searchResultSchema = z.object({
   springAiSql: z.string(),
 });
 
+/** GET /api/v1/neighbors/sample: the real neighbors of a sample, for the projection fidelity. */
+export const neighborSampleSchema = z.object({
+  datasetVersion: z.string(),
+  metric: resolvedMetricSchema,
+  k: count,
+  loadedChunks: count,
+  samples: z.array(z.object({ id: z.string(), neighbors: z.array(z.string()) })),
+});
+
 export const embeddingTestSchema = z.object({
   model: z.string(),
   dimensions: z.number().int().positive(),
@@ -217,6 +226,7 @@ export type Problem = z.infer<typeof problemSchema>;
 export type SearchMatch = z.infer<typeof searchMatchSchema>;
 export type SearchResult = z.infer<typeof searchResultSchema>;
 export type EmbeddingTest = z.infer<typeof embeddingTestSchema>;
+export type NeighborSample = z.infer<typeof neighborSampleSchema>;
 
 /** Body of POST /api/v1/search. */
 export interface SearchRequest {

@@ -40,3 +40,40 @@
 .control input[type='range'] {
   width: 100%;
 }
+
+.methods {
+  margin: 0 0 4px;
+  padding: 0;
+  border: none;
+}
+
+.method {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.method input {
+  margin-top: 3px;
+}
+
+.umapStatus {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin: 8px 0 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-muted);
+}
+
+.umapStatus p {
+  margin: 0;
+}
+
+.progress {
+  width: 100%;
+  height: 10px;
+}

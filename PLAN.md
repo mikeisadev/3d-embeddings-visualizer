@@ -63,10 +63,10 @@ Legend: `[x]` done, `[ ]` to do.
 
 ## M6 – Optional features (only after M1–M5 are green)
 
-- [ ] `GET /api/v1/vectors` (binary float32) + UMAP in a Web Worker (progress, cancel, errors)
-- [ ] "Percorso del documento" lines and file centroids with labels
-- [ ] "Fedeltà della proiezione" score (`GET /api/v1/neighbors/sample`)
-- [ ] Presentation mode and PNG screenshot
+- [x] `GET /api/v1/vectors` (binary float32) + UMAP in a Web Worker (progress, cancel, errors)
+- [x] "Percorso del documento" lines and file centroids with labels
+- [x] "Fedeltà della proiezione" score (`GET /api/v1/neighbors/sample`)
+- [x] Presentation mode and PNG screenshot
 
 ## Checkpoints
 
@@ -112,3 +112,13 @@ Legend: `[x]` done, `[ ]` to do.
 - Docs: README, database connection guide and classroom guide (Italian), architecture with a deployment section, decisions D23–D27; README screenshot taken from the demo stack.
 - Verified on the Docker demo stack: smoke test green, no CSP violations in Chromium (zod set to jitless), database stopped → `DB_UNAVAILABLE` with its hint while the points stay on screen → back by itself about 10 s after the restart.
 - Tests: backend 108 unit + 51 integration (now on the pinned `pgvector/pgvector:0.8.7-pg17` and `postgres:17.11-alpine3.24`), frontend 92.
+
+### M6 – Optional features ✅
+
+- `GET /api/v1/vectors`: the snapshot vectors streamed as float32 little-endian, aligned with `/points` (`X-Rows`, `X-Dimensions`, `X-Dataset-Version`, 409 `DATASET_CHANGED`), never copied in memory.
+- UMAP (umap-js 1.4.0) in a module Web Worker: chosen in "Proiezione", seeded (same data, same picture), same normalization rule as the PCA, progress bar, "Annulla", errors with "Riprova"; the PCA stays on screen meanwhile. 300 chunks in about 1.5 s; umap-js only in the worker bundle.
+- "Fedeltà dei vicini": `GET /api/v1/neighbors/sample` (real neighbors of 200 chunks, computed in memory with the pgvector ordering, equal to the exact database query) compared with the nearest points on screen. Demo data: PCA 17%, UMAP 46%.
+- "Percorsi" (reading order of each file) and "Centroidi" (center and name of each file) in the 3D toolbar; with UMAP the question marker is placed among its results and labeled approximate; the comparison panel stops comparing distances.
+- "Modalità presentazione" (larger text and 3D labels) and "Salva immagine" (PNG with a caption band carrying the projection caveat); the camera leaves room for the toolbar.
+- Verified on the Docker demo stack in Chromium: UMAP, fidelity, guides, download, cancel, presentation and the RAG marker with a local fake provider, with no console errors and no CSP violations.
+- Tests: backend 119 unit + 57 integration, frontend 134 (the frontend image runs them at build time).

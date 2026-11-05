@@ -24,8 +24,7 @@ export const it = {
     dataset: (table: string, chunks: number, dimensions: number | null) =>
       `${table} · ${formatInteger(chunks)} chunk` +
       (dimensions === null ? '' : ` · ${formatInteger(dimensions)} dimensioni`),
-    presentationOn: 'Modalità presentazione',
-    presentationOff: 'Esci dalla presentazione',
+    presentation: 'Modalità presentazione',
   },
 
   common: {
@@ -126,10 +125,31 @@ export const it = {
 
   projection: {
     title: 'Proiezione',
-    info: 'La PCA cerca le tre direzioni lungo cui i vettori cambiano di più e vi proietta ogni punto. La percentuale dice quanta varianza (informazione) resta visibile: il resto si perde nell’ombra. Con gli embedding di testo è normale vederne meno di un terzo.',
+    info: 'La PCA cerca le tre direzioni lungo cui i vettori cambiano di più e vi proietta ogni punto: la percentuale dice quanta varianza (informazione) resta visibile, il resto si perde nell’ombra. Con gli embedding di testo è normale vederne ben meno della metà. UMAP invece non è lineare: tiene vicini i chunk vicini nello spazio vero, ma deforma le distanze. La fedeltà dei vicini dice quanto ci si può fidare di «vicino nel grafico».',
     lesson: 'L18 §2.3',
     method: 'Metodo',
-    pca: 'PCA (calcolata dal backend)',
+    methods: { pca: 'PCA', umap: 'UMAP' },
+    methodHints: {
+      pca: 'Lineare, calcolata dal backend: l’«ombra» dei vettori, con la varianza spiegata.',
+      umap: 'Non lineare, calcolata nel tuo browser: separa meglio i gruppi, ma deforma le distanze.',
+    },
+    umapDownloading: 'Scarico i vettori dal backend…',
+    umapNeighbors: 'UMAP cerca i vicini di ogni chunk (può richiedere qualche secondo)…',
+    umapOptimizing: (epoch: number, epochs: number) =>
+      `UMAP dispone i punti: passo ${formatInteger(epoch)} di ${formatInteger(epochs)}.`,
+    umapPcaMeanwhile: 'Nel frattempo il grafico mostra la PCA.',
+    umapProgress: 'Avanzamento di UMAP',
+    umapCancel: 'Annulla',
+    umapReady: 'Il grafico mostra la proiezione UMAP, calcolata nel tuo browser.',
+    umapTooFew: (minimum: number) => `UMAP richiede almeno ${formatInteger(minimum)} chunk.`,
+    umapNoVariance:
+      'UMAP non ha una «varianza spiegata»: non proietta su direzioni fisse. Per giudicarla guarda la fedeltà dei vicini.',
+    fidelity: 'Fedeltà dei vicini',
+    fidelityExplained: (kept: number, k: number, samples: number) =>
+      `In media ${formatNumber(kept, 1)} dei ${formatInteger(k)} vicini veri di un chunk sono anche tra i ${formatInteger(k)} punti più vicini nel grafico (campione di ${formatInteger(samples)} chunk).`,
+    fidelityNote:
+      'I vicini veri li calcola il backend su tutti i numeri; quelli del grafico usano solo le 3 coordinate. Confronta PCA e UMAP.',
+    fidelityUnavailable: 'Servono almeno 2 chunk per misurare la fedeltà.',
     explained: 'Varianza spiegata',
     component: (index: number) => `PC${index + 1}`,
     total: 'Totale',
@@ -243,6 +263,8 @@ export const it = {
     euclideanDistance: 'Distanza euclidea',
     dotProduct: 'Prodotto scalare',
     distance3d: 'Distanza nel grafico',
+    umapDistance:
+      'Con UMAP la distanza nel grafico non si confronta con quella vera: UMAP conserva chi è vicino a chi, non quanto. Passa alla PCA per questo confronto.',
     shownShare: (ratio: number) =>
       `Il grafico mostra il ${formatPercent(ratio, 0)} della distanza vera.`,
     why: 'La proiezione può solo schiacciare le distanze: due chunk vicini nel grafico possono essere lontani nello spazio vero, perché differiscono lungo direzioni che il grafico non mostra.',
@@ -284,6 +306,9 @@ export const it = {
     disabledRestart: 'Poi riavvia il backend: docker compose up -d.',
     questionMarker: 'Domanda',
     approximate: 'posizione approssimata',
+    approximateMarker: 'Domanda (posizione approssimata)',
+    umapApproximate:
+      'Con UMAP la domanda non si può proiettare: nel grafico è disegnata nella media dei suoi chunk, pesata per similarità.',
     clear: 'Togli la ricerca dal grafico',
   },
 
@@ -306,7 +331,7 @@ export const it = {
       },
       {
         title: 'Quanto perde la proiezione?',
-        text: 'Leggi la varianza spiegata in «Proiezione». Quanta informazione vedi davvero? Che cosa resta nascosto?',
+        text: 'Leggi la varianza spiegata e la fedeltà dei vicini in «Proiezione». Quanta informazione vedi davvero? Passa a UMAP: la fedeltà cambia? Che cosa perdi?',
       },
       {
         title: 'Il metadata department',
@@ -323,15 +348,24 @@ export const it = {
     toolbar: 'Comandi della vista 3D',
     resetView: 'Reimposta vista',
     grid: 'Griglia',
+    paths: 'Percorsi',
+    pathsHint: 'Unisce i chunk di ogni file nell’ordine di lettura (pagina, poi indice del chunk).',
+    centroids: 'Centroidi',
+    centroidsHint: 'Il centro dei chunk di ogni file, con il suo nome.',
     screenshot: 'Salva immagine',
+    screenshotHint: 'Scarica un PNG della vista, con la nota sulla proiezione.',
     loading: 'Caricamento della vista 3D…',
     loadingPoints: 'Caricamento dei punti…',
     reloadingPoints: 'Aggiornamento dei punti…',
     axis: (index: number, ratio: number | null) =>
       `PC${index + 1}` + (ratio === null ? '' : ` · ${formatPercent(ratio)}`),
+    axisUmap: (index: number) => `UMAP ${index + 1}`,
     tooltipPage: (page: number | null) =>
       page === null ? 'pagina ?' : `pagina ${formatInteger(page)}`,
     projectionBadge: 'Proiezione PCA: le distanze nel grafico sono approssimate.',
+    projectionBadgeUmap: 'Proiezione UMAP: conserva i vicini, non le distanze.',
+    umapRunning: (share: number | null) =>
+      share === null ? 'Calcolo di UMAP…' : `Calcolo di UMAP… ${formatPercent(share, 0)}`,
     noWebgl: 'Il browser non supporta WebGL 2, quindi la vista 3D non è disponibile.',
     noWebglHint:
       'Usa un browser recente (Chrome, Firefox, Edge, Safari) o attiva l’accelerazione hardware. Puoi comunque usare la lista dei chunk nella barra laterale.',
@@ -458,6 +492,10 @@ export const it = {
     UNEXPECTED_STATUS: {
       message: 'Il server ha risposto con un errore inatteso.',
       hint: 'Riprova; se succede ancora, controlla i log del backend.',
+    },
+    UMAP_FAILED: {
+      message: 'Il calcolo di UMAP non è riuscito.',
+      hint: 'Riprova o torna alla PCA. Con molti chunk UMAP richiede parecchia memoria: puoi ridurre VIZ_MAX_POINTS.',
     },
   } satisfies Record<string, MessageWithHint>,
 

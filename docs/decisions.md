@@ -163,3 +163,39 @@ Choices that the brief left open. Each entry: context, decision, consequence.
 - **Context:** zod 4 probes `new Function("")` to decide whether it can compile object schemas; under the strict Content-Security-Policy (no `'unsafe-eval'`) that probe is reported as a violation on every page load.
 - **Decision:** `z.config({ jitless: true })` at the top of `api/schemas.ts`, before any schema is defined.
 - **Consequence:** a clean browser console under the CSP; validation is a little slower, which is irrelevant for at most `VIZ_MAX_POINTS` points.
+
+## D28 – UMAP in a Web Worker, on request
+
+- **Context:** the optional UMAP projection must run in the browser (umap-js) without freezing the page, report progress, be cancellable and report its errors.
+- **Decision:** umap-js 1.4.0 runs in a module Web Worker that Vite bundles as a separate same-origin file (CSP `worker-src 'self'`); only the worker imports the library. The page downloads the snapshot vectors from `GET /api/v1/vectors` (float32, no JSON overhead), checks the row count against the points and transfers the buffer to the worker. Parameters: 3 components, 15 neighbors (fewer for small tables), `minDist` 0.1, a fixed seed for every random draw. The same normalization rule as the PCA (cosine metric and "Normalizza" on: unit vectors, then euclidean distance). UMAP starts only when the student chooses it, needs at least 10 chunks, and is cached per `datasetVersion` and normalize flag; the PCA stays on screen until the layout is ready. Cancelling terminates the worker; a failure becomes `UMAP_FAILED` with "Riprova".
+- **Consequence:** 300 chunks take about 1.5 s, 5,000 chunks about 25 s (half of it in the neighbor search, which reports no progress: the bar is indeterminate meanwhile). The same data always gives the same picture.
+
+## D29 – The vectors endpoint is streamed
+
+- **Context:** `GET /api/v1/vectors` can be 30 MB (5,000 × 1,536 float32) and must stay aligned with `/points`.
+- **Decision:** the controller returns a `StreamingResponseBody` that writes the snapshot matrix through a 64 KB little-endian buffer, with `Content-Length`, `X-Rows`, `X-Dimensions` and `X-Dataset-Version`. A `datasetVersion` that is not the current one answers 409 `DATASET_CHANGED` before streaming starts. The MVC async timeout is 120 s (slow classroom Wi-Fi); a client that disconnects is ignored quietly by Spring (`AsyncRequestNotUsableException`).
+- **Consequence:** no second copy of the vectors in memory and no misaligned picture after a new PDF.
+
+## D30 – Projection fidelity
+
+- **Context:** the brief asks for a "Fedeltà della proiezione" score: how many real neighbors are also neighbors in 3D.
+- **Decision:** `GET /api/v1/neighbors/sample` (defaults: 200 chunks, k = 10) picks chunks evenly spaced in reading order (every file in proportion) and computes their real neighbors in memory, on the full snapshot vectors, with the ordering of the pgvector operator (cosine, L2 or negative dot product; ties to the lower row, zero vectors last). The candidates are the loaded chunks only, the same points the view draws. The frontend finds the k nearest points in the displayed coordinates and reports the share of real neighbors kept, for PCA and UMAP alike.
+- **Consequence:** an integration test checks that the in-memory neighbors equal the exact database query. The worst case (200 × 5,000 × 1,536) takes about 0.5 s on 4 cores. On the demo data the PCA keeps about 17% of the neighbors and UMAP about 46%: the lesson the score is for.
+
+## D31 – The question marker with UMAP
+
+- **Context:** UMAP cannot place a new point (the question) without refitting.
+- **Decision:** with UMAP the marker goes to the similarity-weighted average of the positions of its top-K chunks (plain average when no similarity is positive) and is labeled "Domanda (posizione approssimata)"; the RAG panel explains why. With the PCA it stays the exact projection computed by the backend.
+- **Consequence:** the marker is honest in both cases; the lines to the results remain exact (they join real results).
+
+## D32 – Document paths and file centroids in the frontend
+
+- **Context:** "Percorso del documento" and file centroids need positions in the displayed projection, PCA or UMAP.
+- **Decision:** both are computed in the frontend from the points on screen: the response order is the reading order (file, page, chunk index), so a file's path joins its chunks as they come; the centroid is the mean of its projected points. For the PCA this is exactly the projection of the file's mean vector (the projection is linear). Hidden legend categories are skipped; the colors are those of "Colora per: File"; labels are cut at 28 characters. Both are toggles of the 3D toolbar ("Percorsi", "Centroidi").
+- **Consequence:** no extra endpoint; paths and centers follow the method, the filters and the data automatically.
+
+## D33 – Presentation mode, screenshot and camera framing
+
+- **Context:** the projector needs larger text; a screenshot shared outside the tool must not lose the projection caveat; the larger toolbar must not cover the top axis label.
+- **Decision:** "Modalità presentazione" (header, `aria-pressed`) sets `<html data-presentation>`: 18 px text, a wider sidebar and 3D labels 1.4 times larger. "Salva immagine" renders a frame and copies the WebGL canvas right away (no `preserveDrawingBuffer`) onto a 2D canvas with a caption band (dataset and projection caveat); the file name says the table, the method and the time. The default camera is about 2.1 units from the center, leaving room for the toolbar.
+- **Consequence:** classroom-ready view and images that explain themselves.

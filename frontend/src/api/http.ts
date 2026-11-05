@@ -4,6 +4,8 @@ import { problemSchema } from './schemas';
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 const GATEWAY_STATUSES = new Set([502, 503, 504]);
+const JSON_ACCEPT = 'application/json, application/problem+json';
+const BINARY_ACCEPT = 'application/octet-stream, application/problem+json';
 /** Passed to abort() when the timeout fires, to tell a timeout from a cancellation. */
 const TIMEOUT_REASON = new Error('The request timed out');
 
@@ -15,16 +17,52 @@ export interface RequestOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
+/** A successful binary response: the raw bytes and the headers that describe them. */
+export interface BinaryResponse {
+  readonly body: ArrayBuffer;
+  readonly headers: Headers;
+  readonly requestId: string;
+}
+
 /**
  * Calls the backend and validates the JSON response with {@code schema}. Every failure becomes
  * an {@link ApiError}: problem documents keep the backend code; network errors, timeouts,
  * non-JSON bodies (for example the nginx page while the backend restarts) and unexpected
  * shapes get a client code.
  */
-export async function requestJson<T>(
+export function requestJson<T>(
   path: string,
   schema: z.ZodType<T>,
   options: RequestOptions = {},
+): Promise<T> {
+  return send(path, options, JSON_ACCEPT, async (response, requestId) =>
+    parseResponse(response, await response.text(), schema, requestId),
+  );
+}
+
+/**
+ * Calls an endpoint that answers with raw bytes (application/octet-stream). Its errors are
+ * problem documents like everywhere else, so they become the same {@link ApiError}.
+ */
+export function requestBinary(path: string, options: RequestOptions = {}): Promise<BinaryResponse> {
+  return send(path, options, BINARY_ACCEPT, async (response, sentRequestId) => {
+    const requestId = response.headers.get('X-Request-Id') ?? sentRequestId;
+    if (!response.ok) {
+      throw failure(response, await response.text(), requestId);
+    }
+    return { body: await response.arrayBuffer(), headers: response.headers, requestId };
+  });
+}
+
+/**
+ * The common part of every call: request id, timeout, caller cancellation and the mapping of
+ * network failures. Reading the body happens in {@code read}, still under the timeout.
+ */
+async function send<T>(
+  path: string,
+  options: RequestOptions,
+  accept: string,
+  read: (response: Response, requestId: string) => Promise<T>,
 ): Promise<T> {
   const requestId = newRequestId();
   const controller = new AbortController();
@@ -39,12 +77,11 @@ export async function requestJson<T>(
   try {
     const response = await fetch(path, {
       method: options.method ?? 'GET',
-      headers: requestHeaders(requestId, options.body !== undefined),
+      headers: requestHeaders(requestId, accept, options.body !== undefined),
       body: options.body === undefined ? null : JSON.stringify(options.body),
       signal: controller.signal,
     });
-    const text = await response.text();
-    return parseResponse(response, text, schema, requestId);
+    return await read(response, requestId);
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;
@@ -62,11 +99,12 @@ export async function requestJson<T>(
   }
 }
 
-function requestHeaders(requestId: string, hasBody: boolean): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json, application/problem+json',
-    'X-Request-Id': requestId,
-  };
+function requestHeaders(
+  requestId: string,
+  accept: string,
+  hasBody: boolean,
+): Record<string, string> {
+  const headers: Record<string, string> = { Accept: accept, 'X-Request-Id': requestId };
   if (hasBody) {
     headers['Content-Type'] = 'application/json';
   }
@@ -80,25 +118,11 @@ function parseResponse<T>(
   sentRequestId: string,
 ): T {
   const requestId = response.headers.get('X-Request-Id') ?? sentRequestId;
-  const body = parseJson(text);
-
   if (!response.ok) {
-    const problem = body.ok ? problemSchema.safeParse(body.value) : null;
-    if (problem?.success) {
-      throw new ApiError({
-        code: problem.data.code,
-        status: response.status,
-        requestId: problem.data.requestId ?? requestId,
-        detail: problem.data.detail ?? null,
-        properties: problem.data,
-      });
-    }
-    const code = GATEWAY_STATUSES.has(response.status)
-      ? 'BACKEND_UNAVAILABLE'
-      : 'UNEXPECTED_STATUS';
-    throw new ApiError({ code, status: response.status, requestId });
+    throw failure(response, text, requestId);
   }
 
+  const body = parseJson(text);
   if (!body.ok) {
     throw new ApiError({
       code: 'INVALID_RESPONSE',
@@ -121,6 +145,23 @@ function parseResponse<T>(
     });
   }
   return parsed.data;
+}
+
+/** The error of a non-2xx response: the backend problem when there is one, else a client code. */
+function failure(response: Response, text: string, requestId: string): ApiError {
+  const body = parseJson(text);
+  const problem = body.ok ? problemSchema.safeParse(body.value) : null;
+  if (problem?.success) {
+    return new ApiError({
+      code: problem.data.code,
+      status: response.status,
+      requestId: problem.data.requestId ?? requestId,
+      detail: problem.data.detail ?? null,
+      properties: problem.data,
+    });
+  }
+  const code = GATEWAY_STATUSES.has(response.status) ? 'BACKEND_UNAVAILABLE' : 'UNEXPECTED_STATUS';
+  return new ApiError({ code, status: response.status, requestId });
 }
 
 type JsonResult = { readonly ok: true; readonly value: unknown } | { readonly ok: false };

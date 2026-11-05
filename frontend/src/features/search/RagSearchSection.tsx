@@ -5,7 +5,7 @@ import type { SearchRequest, SearchResult } from '../../api/schemas';
 import { ErrorMessage } from '../../components/ErrorMessage';
 import { Section } from '../../components/Section';
 import ui from '../../components/ui.module.css';
-import { useDiagnostics } from '../../hooks/queries';
+import { useDiagnostics, usePointCloudView } from '../../hooks/queries';
 import { it } from '../../i18n/it';
 import { cx } from '../../lib/cx';
 import { embeddingEnabled } from '../../lib/embedding';
@@ -61,7 +61,11 @@ function SearchPanel() {
         datasetVersion: result.datasetVersion,
         normalized: result.normalized,
         queryPoint: result.queryPoint,
-        results: result.results.map((match) => ({ id: match.id, passes: match.passesThreshold })),
+        results: result.results.map((match) => ({
+          id: match.id,
+          passes: match.passesThreshold,
+          similarity: match.similarity,
+        })),
       });
     },
   });
@@ -154,6 +158,7 @@ function SearchResults({
 }) {
   const select = useUiStore((state) => state.select);
   const focusOn = useUiStore((state) => state.focusOn);
+  const umapOnScreen = usePointCloudView()?.method === 'umap';
   const passing = result.results.filter((match) => match.passesThreshold).length;
 
   return (
@@ -161,6 +166,7 @@ function SearchResults({
       <h3 className={ui.subheading}>{it.rag.results}</h3>
       <p className={styles.summary}>{it.rag.summary(passing, result.results.length)}</p>
       <p className={ui.muted}>{it.rag.latency(result.model, result.embeddingLatencyMs)}</p>
+      {umapOnScreen && <p className={ui.muted}>{it.rag.umapApproximate}</p>}
       <ol className={styles.list}>
         {result.results.map((match) => (
           <li

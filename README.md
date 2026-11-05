@@ -21,7 +21,13 @@ embedding, vedere i suoi vicini veri e simulare una ricerca RAG come fa il `RagS
 - mostra il chunk selezionato: testo, metadata, statistiche del vettore e il suo "codice a barre";
 - trova i **vicini veri** di un chunk e confronta due chunk, con i calcoli fatti dal database;
 - simula la ricerca RAG: la domanda diventa un embedding e vedi quali chunk entrano nel contesto e
-  quali vengono scartati dalla soglia.
+  quali vengono scartati dalla soglia;
+- misura la **fedeltà dei vicini**: quanti vicini veri di un chunk restano vicini anche nel grafico;
+- oltre alla PCA offre **UMAP**, calcolata nel browser: separa meglio i gruppi, ma deforma le
+  distanze (e lo dice);
+- mostra il **percorso** di ogni documento (i chunk nell'ordine di lettura) e il suo **centro**;
+- ha una **modalità presentazione** per il proiettore e salva un'immagine PNG della vista, con la nota
+  sulla proiezione.
 
 **Non fa (di proposito):**
 
@@ -96,11 +102,14 @@ Per fermare tutto: `docker compose down` (con la demo aggiungi gli stessi `-f`).
 ## L'interfaccia
 
 A sinistra la barra laterale, a destra la vista 3D (trascina per ruotare, rotella per lo zoom,
-tasto destro per spostare, doppio clic per centrare un punto). Le sezioni, in ordine:
+tasto destro per spostare, doppio clic per centrare un punto). In alto a destra della vista:
+**Reimposta vista**, **Griglia**, **Percorsi**, **Centroidi** e **Salva immagine**; nell'intestazione,
+**Modalità presentazione** (testo e etichette più grandi). Le sezioni, in ordine:
 
 1. **Stato**: la checklist di diagnostica e il riepilogo del dataset.
 2. **Come leggere il grafico**: la guida di un minuto.
-3. **Proiezione**: metodo, varianza spiegata da PC1, PC2, PC3, normalizzazione, dimensione dei punti.
+3. **Proiezione**: metodo (PCA o UMAP), varianza spiegata da PC1, PC2, PC3, fedeltà dei vicini,
+   normalizzazione, dimensione dei punti.
 4. **Colori e filtri**: "Colora per", legenda, filtri per file e pagine, ricerca nel testo e la lista
    dei chunk (l'alternativa accessibile al grafico).
 5. **Chunk selezionato**: testo, metadata, vettore e vicini veri.
@@ -247,6 +256,10 @@ La tabella completa, con ogni codice di errore, è in
 - I vicini veri sono calcolati con una ricerca **esatta** (scansione completa); il chatbot e la
   simulazione RAG usano invece l'indice HNSW, approssimato ma più veloce.
 - Il limite di chiamate al minuto è in memoria: vale per una sola istanza del backend.
+- UMAP è calcolata nel browser: pochi secondi per qualche centinaio di chunk, circa mezzo minuto per
+  5000 (con barra di avanzamento e «Annulla»). Con UMAP la domanda della ricerca RAG è disegnata nella
+  media dei suoi chunk (posizione approssimata) e le distanze nel grafico non si confrontano con
+  quelle vere.
 
 ## Documentazione
 
