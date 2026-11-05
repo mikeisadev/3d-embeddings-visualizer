@@ -20,14 +20,14 @@ Legend: `[x]` done, `[ ]` to do.
 
 ## M2 – Data and math
 
-- [ ] Snapshot loading: one consistent read-only transaction, deterministic order, sampling above `VIZ_MAX_POINTS`, dirty-data warnings, memory budget, `DIMENSION_MISMATCH`
-- [ ] `datasetVersion` fingerprint, single-flight cache that keeps only the latest snapshot
-- [ ] PCA (deterministic block power iteration + Rayleigh–Ritz, sign fix, explained variance), cached per `datasetVersion` and `normalize`
-- [ ] `GET /api/v1/points?normalize=`
-- [ ] `GET /api/v1/chunks/{id}` (full content, metadata, vector, stats) and `GET /api/v1/chunks?contains=` (full-text match)
-- [ ] `GET /api/v1/chunks/{id}/neighbors?k=` (real neighbors in SQL, SQL template returned)
-- [ ] `GET /api/v1/compare?a=&b=` (cosine, euclidean, dot product in SQL)
-- [ ] Tests: PCA math (known axes, orthonormality, ratios, determinism, performance), snapshot/sampling/neighbors/compare integration tests
+- [x] Snapshot loading: one consistent read-only transaction, deterministic order, sampling above `VIZ_MAX_POINTS`, dirty-data warnings, memory budget, `DIMENSION_MISMATCH`
+- [x] `datasetVersion` fingerprint, single-flight cache that keeps only the latest snapshot
+- [x] PCA (deterministic block power iteration + Rayleigh–Ritz, sign fix, explained variance), cached per `datasetVersion` and `normalize`
+- [x] `GET /api/v1/points?normalize=`
+- [x] `GET /api/v1/chunks/{id}` (full content, metadata, vector, stats) and `GET /api/v1/chunks?contains=` (full-text match)
+- [x] `GET /api/v1/chunks/{id}/neighbors?k=` (real neighbors in SQL, SQL template returned)
+- [x] `GET /api/v1/compare?a=&b=` (cosine, euclidean, dot product in SQL)
+- [x] Tests: PCA math (known axes, orthonormality, ratios, determinism, performance), snapshot/sampling/neighbors/compare integration tests
 
 ## M3 – Frontend MVP
 
@@ -77,3 +77,11 @@ Legend: `[x]` done, `[ ]` to do.
 - `SqlIdentifier`/`TableRef`, request id filter, RFC 9457 problems with `code`/`requestId`/`timestamp`, SQLSTATE translator.
 - `GET /api/v1/diagnostics` (10 checks, dependencies, `SKIPPED`), `GET /api/v1/dataset` (snapshot-based summary; the snapshot loader and its cache landed here already because the summary needs them).
 - Tests: 74 unit + 21 integration (Testcontainers `pgvector/pgvector:pg17` and plain `postgres:17-alpine`), including database stopped and restarted while the app runs.
+
+### M2 – Data and math ✅
+
+- Snapshot cache with `datasetVersion` (row count + hash of ids and row versions), single-flight loading, deterministic md5 sample, memory budget.
+- PCA (block power iteration + Rayleigh–Ritz): 5,000 × 1,536 in about 0.3 s, verified against an exact eigendecomposition; cached per version and normalize flag.
+- `GET /points`, `GET /chunks/{id}`, `GET /chunks?contains=`, `GET /chunks/{id}/neighbors` (exact, any k up to 50), `GET /compare`.
+- Demo database scripts written early (needed to develop the frontend).
+- Tests: 89 unit + 42 integration, all green.

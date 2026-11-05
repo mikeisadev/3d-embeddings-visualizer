@@ -1,6 +1,7 @@
 package com.example.embeddingexplorer.dataset;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import com.example.embeddingexplorer.config.DistanceMetricSetting;
 import java.util.List;
@@ -93,6 +94,17 @@ class DatasetModelTest {
         assertThat(pages.valueType()).isEqualTo(MetadataKeyStats.ValueType.NUMBER);
         assertThat(stats.get(0).distinctValues()).isEqualTo(1);
         assertThat(stats.get(1).valueType()).isEqualTo(MetadataKeyStats.ValueType.MIXED);
+    }
+
+    @Test
+    void vectorStatsDescribeAllTheValues() {
+        VectorStats stats = VectorStats.of(new float[] {3, -4, 0, 1});
+
+        assertThat(stats.dimensions()).isEqualTo(4);
+        assertThat(stats.norm()).isCloseTo(Math.sqrt(26), within(1e-12));
+        assertThat(stats.min()).isEqualTo(-4);
+        assertThat(stats.max()).isEqualTo(3);
+        assertThat(stats.mean()).isEqualTo(0);
     }
 
     @Test

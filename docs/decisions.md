@@ -61,3 +61,33 @@ Choices that the brief left open. Each entry: context, decision, consequence.
 - **Context:** Spring interpolates validation messages in the browser language (`Accept-Language`).
 - **Decision:** fixed English locale (`spring.web.locale=en`, `spring.web.locale-resolver=fixed`). Floating-point numbers in details are formatted with `Locale.ROOT`.
 - **Consequence:** API details are always English and technical; the Italian text comes from the frontend i18n.
+
+## D11 – PCA algorithm
+
+- **Context:** top 3 principal components of up to 5,000 × 1,536 vectors in under 2 s, deterministic, without heavy dependencies.
+- **Decision:** block power iteration (8 vectors for 3 components) with a Rayleigh–Ritz step, written in plain Java (`projection.Pca`). The d × d covariance matrix is never built; each iteration multiplies the centered data by the block. Fixed seed, rows processed in fixed-size blocks summed in order (deterministic whatever the number of threads), stop when the residual ‖C·z − θ·z‖ ≤ 10⁻⁶·θ₁ or after 100 iterations; the largest coordinate of each component is made positive. The working copy is `float` (half the memory), every sum is `double`. Normalization is applied only with the cosine metric.
+- **Consequence:** about 0.3 s for 5,000 × 1,536 on 4 cores (7 iterations on embedding-like data); verified against an exact Jacobi eigendecomposition. The explained variance shown for each axis is the exact variance of the data along it. Structureless random data hits the cap (about 2 s) and reports `converged: false`.
+
+## D12 – Exact neighbors
+
+- **Context:** an HNSW index is approximate and returns at most `hnsw.ef_search` (40) rows, but the neighbors are the "truth" the 3D view is compared with, and `k` can be 50.
+- **Decision:** the neighbors query is the classic `ORDER BY embedding <=> CAST(? AS vector) LIMIT ?`, run in a read-only transaction after `SELECT set_config('enable_indexscan', 'off', true)` (still a `SELECT`): PostgreSQL scans every vector. The response says `exact: true`. The RAG simulation keeps the index, exactly like Spring AI.
+- **Consequence:** correct results for any `k` in milliseconds on classroom tables; a teaching point ("the chatbot uses an approximate index").
+
+## D13 – Full-text search endpoint
+
+- **Context:** the "text search that highlights the matching chunks" would only see the 160-character previews.
+- **Decision:** added `GET /api/v1/chunks?contains=…` (2–200 characters): `strpos(lower(content), lower(?)) > 0`, a bound parameter, no `LIKE` wildcards to escape; at most `VIZ_MAX_POINTS` ids.
+- **Consequence:** students find every chunk that mentions a word, not only those whose first words contain it.
+
+## D14 – Undefined numbers are null
+
+- **Context:** the cosine distance of a zero vector is NaN, which JSON cannot represent.
+- **Decision:** distances and similarities are nullable and NaN becomes `null`.
+- **Consequence:** dirty data never breaks the response validation of the frontend.
+
+## D15 – Demo data
+
+- **Context:** the demo database needs about 300 seeded, normalized synthetic vectors in a few clusters, clearly marked as synthetic.
+- **Decision:** `demo-db/init` generates them in SQL from `md5()` (identical on every machine and PostgreSQL version): five files (four topics plus a mixed FAQ), 60 chunks each, three per page; each vector is `0.7·shared + topic + 0.35·reading position·drift + noise`, normalized. Same-topic cosine similarity is about 0.58, cross-topic about 0.19. Content starts with "[DEMO – dati sintetici]" and metadata has `"demo": true`. A second table, `vector_store_minilm` (384 dimensions), supports the L18 §12 comparison exercise.
+- **Consequence:** realistic geometry (the first three components keep about 42% of the variance) and a reproducible classroom demo.
