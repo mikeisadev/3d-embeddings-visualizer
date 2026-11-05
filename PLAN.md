@@ -31,16 +31,16 @@ Legend: `[x]` done, `[ ]` to do.
 
 ## M3 – Frontend MVP
 
-- [ ] Vite + React + TypeScript (strict) project, ESLint + Prettier, Vitest + Testing Library
-- [ ] Typed API client (timeout, `ProblemDetail` parsing, `ApiError`), zod schemas, retry policy
-- [ ] Italian i18n (`src/i18n/it.ts`) and error code → message/hint mapping
-- [ ] UI store (selection, compare, colors, filters, preferences)
-- [ ] Layout: header, collapsible sidebar sections with "i" buttons, first-run overlay
-- [ ] Sections 1–6 and 8: Stato, Come leggere il grafico, Proiezione, Colori e filtri, Chunk selezionato, Confronta due chunk, Esercizi
-- [ ] `SceneController` (three.js): instanced points, hover/click/double click, neighbors lines, axes, reset view, resource hygiene
-- [ ] 3D view wrapper: error boundary, WebGL detection, context loss, resize
-- [ ] Dataset version watcher (reload points and tell the user why)
-- [ ] Tests: pure modules, zod schemas, component states (loading / empty / error / success) for every section
+- [x] Vite + React + TypeScript (strict) project, ESLint + Prettier, Vitest + Testing Library
+- [x] Typed API client (timeout, `ProblemDetail` parsing, `ApiError`), zod schemas, retry policy
+- [x] Italian i18n (`src/i18n/it.ts`) and error code → message/hint mapping
+- [x] UI store (selection, compare, colors, filters, preferences)
+- [x] Layout: header, collapsible sidebar sections with "i" buttons, first-run overlay
+- [x] Sections 1–6 and 8: Stato, Come leggere il grafico, Proiezione, Colori e filtri, Chunk selezionato, Confronta due chunk, Esercizi
+- [x] `SceneController` (three.js): instanced points, hover/click/double click, neighbors lines, axes, reset view, resource hygiene
+- [x] 3D view wrapper: error boundary, WebGL detection, context loss, resize
+- [x] Dataset version watcher (reload points and tell the user why)
+- [x] Tests: pure modules, zod schemas, component states (loading / empty / error / success) for every section
 
 ## M4 – RAG simulation
 
@@ -85,3 +85,13 @@ Legend: `[x]` done, `[ ]` to do.
 - `GET /points`, `GET /chunks/{id}`, `GET /chunks?contains=`, `GET /chunks/{id}/neighbors` (exact, any k up to 50), `GET /compare`.
 - Demo database scripts written early (needed to develop the frontend).
 - Tests: 89 unit + 42 integration, all green.
+
+### M3 – Frontend MVP ✅
+
+- Vite 8 + React 19 + TypeScript 6 (strict, `noUncheckedIndexedAccess`), ESLint (type-checked) + Prettier, Vitest 5 + Testing Library.
+- Typed API client (timeout, problem documents, one `ApiError`), zod validation of every response, retries only for transient GET failures.
+- All Italian text in `src/i18n/it.ts`, including a message and a hint for every error and warning code.
+- Sidebar sections 1–6 and 8 with explicit loading / empty / error / success states and "i" buttons; first-run overlay.
+- three.js `SceneController`: two instanced meshes, hover tooltip, click and double click, real-neighbor lines, A/B comparison line, labeled axes, grid, reset view, context-loss recovery, render on demand.
+- Verified in Chromium against the demo database: a new row is picked up in about 30 s with a notice; database stopped → `DB_UNAVAILABLE` with its hint → back by itself in about 10 s.
+- Tests: 83 frontend tests (pure modules, zod schemas, HTTP client, every section in its states, WebGL fallback, error boundary).

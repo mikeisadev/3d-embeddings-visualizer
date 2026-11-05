@@ -1,0 +1,109 @@
+:root {
+  --color-bg: #f3f6f9;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eef2f6;
+  --color-border: #d4dce4;
+  --color-text: #16202a;
+  --color-text-muted: #52606d;
+  --color-accent: #0b62c4;
+  --color-accent-contrast: #ffffff;
+  --color-ok: #1a7f37;
+  --color-warn: #9a6700;
+  --color-fail: #c62828;
+  --color-skipped: #6e7781;
+  --color-focus: #f0b400;
+  --color-passes: #009e73;
+  --color-discarded: #d55e00;
+  --scene-bg: #0f1720;
+  --scene-text: #e8edf2;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-size: 14px;
+  --radius: 8px;
+  --sidebar-width: 380px;
+  --header-height: 52px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #0d1117;
+    --color-surface: #161b22;
+    --color-surface-muted: #1f2630;
+    --color-border: #30363d;
+    --color-text: #e6edf3;
+    --color-text-muted: #9aa7b4;
+    --color-accent: #4c9be8;
+    --color-accent-contrast: #0d1117;
+    --color-ok: #3fb950;
+    --color-warn: #d29922;
+    --color-fail: #f85149;
+    --color-skipped: #8b949e;
+    color-scheme: dark;
+  }
+}
+
+/* Presentation mode: bigger text for the projector. */
+:root[data-presentation='true'] {
+  --font-size: 18px;
+  --sidebar-width: 460px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--font-size);
+  line-height: 1.45;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  /* Operators such as <=> must stay readable as typed, never as a ligature. */
+  font-variant-ligatures: none;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

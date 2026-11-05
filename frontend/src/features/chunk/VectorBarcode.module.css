@@ -1,0 +1,31 @@
+.figure {
+  margin: 4px 0 8px;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+  image-rendering: pixelated;
+  cursor: crosshair;
+}
+
+.legend {
+  height: 10px;
+  margin-top: 6px;
+  border-radius: 3px;
+}
+
+.range {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+}
+
+.readout {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}

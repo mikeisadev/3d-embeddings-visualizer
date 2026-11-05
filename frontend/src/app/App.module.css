@@ -1,0 +1,52 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.main {
+  display: grid;
+  flex: 1;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  min-height: 0;
+}
+
+.sidebar {
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.scene {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sceneLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  margin: 0;
+  background: var(--scene-bg);
+  color: var(--scene-text);
+}
+
+@media (max-width: 760px) {
+  .main {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(360px, 55vh) auto;
+    overflow-y: auto;
+  }
+
+  .sidebar {
+    order: 2;
+    overflow: visible;
+    border-right: none;
+  }
+
+  .scene {
+    order: 1;
+  }
+}

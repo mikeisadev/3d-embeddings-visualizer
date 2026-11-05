@@ -1,0 +1,57 @@
+.section {
+  border-bottom: 1px solid var(--color-border);
+  padding: 10px 16px 14px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.02em;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font-weight: 700;
+  text-align: left;
+}
+
+.chevron {
+  width: 1em;
+  color: var(--color-text-muted);
+}
+
+.info {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-accent);
+  font-style: italic;
+  font-weight: 700;
+  font-family: Georgia, serif;
+}
+
+.infoText {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--color-surface-muted);
+  font-size: 0.93em;
+}
+
+.content {
+  margin-top: 8px;
+}

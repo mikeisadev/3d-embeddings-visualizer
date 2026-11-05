@@ -1,0 +1,40 @@
+.list {
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.similarity {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  text-align: left;
+}
+
+.preview {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 0.9em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}

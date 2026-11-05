@@ -1,0 +1,55 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: var(--header-height);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logo {
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 30% 65%, #e69f00 0 18%, transparent 19%),
+    radial-gradient(circle at 62% 32%, #56b4e9 0 18%, transparent 19%),
+    radial-gradient(circle at 70% 72%, #009e73 0 18%, transparent 19%), var(--scene-bg);
+}
+
+.name {
+  margin: 0;
+  font-size: 1.15em;
+  white-space: nowrap;
+}
+
+.tagline {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.dataset {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .tagline {
+    display: none;
+  }
+}

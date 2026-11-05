@@ -1,0 +1,42 @@
+.bars {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: 52px 1fr 56px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.barLabel {
+  font-weight: 600;
+}
+
+.meter {
+  width: 100%;
+  height: 12px;
+}
+
+.barValue {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.control {
+  margin-top: 12px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.control input[type='range'] {
+  width: 100%;
+}

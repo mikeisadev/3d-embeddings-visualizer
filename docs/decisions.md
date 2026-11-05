@@ -91,3 +91,27 @@ Choices that the brief left open. Each entry: context, decision, consequence.
 - **Context:** the demo database needs about 300 seeded, normalized synthetic vectors in a few clusters, clearly marked as synthetic.
 - **Decision:** `demo-db/init` generates them in SQL from `md5()` (identical on every machine and PostgreSQL version): five files (four topics plus a mixed FAQ), 60 chunks each, three per page; each vector is `0.7·shared + topic + 0.35·reading position·drift + noise`, normalized. Same-topic cosine similarity is about 0.58, cross-topic about 0.19. Content starts with "[DEMO – dati sintetici]" and metadata has `"demo": true`. A second table, `vector_store_minilm` (384 dimensions), supports the L18 §12 comparison exercise.
 - **Consequence:** realistic geometry (the first three components keep about 42% of the variance) and a reproducible classroom demo.
+
+## D16 – npm lockfile generated with npm 11
+
+- **Context:** npm 10 (bundled with Node 22) crashes with `Cannot read properties of null (reading 'edgesOut')` while resolving the optional peer dependencies of Vitest 5.
+- **Decision:** the lockfile is generated with npm 11; `npm ci` (used by Docker and recommended to students) installs it correctly with both npm 10 and npm 11.
+- **Consequence:** use `npm ci`, not `npm install`, with Node 22; Node 24 LTS (npm 11) has no problem.
+
+## D17 – Keeping the data fresh
+
+- **Context:** the brief asks to reload the points when the data changes and to recover by itself when the database comes back, without hammering the backend.
+- **Decision:** the diagnostics are polled every 10 s only while a check fails (or the backend is unreachable); when they recover, every data query is invalidated. The dataset summary (cheap: a fingerprint and the cached snapshot) is re-checked every 30 s and on window focus; a new `datasetVersion` changes the query keys, reloads the points and shows a notice. Any environment error from another query refreshes the diagnostics, so the "Stato" section explains it. Database errors are not retried automatically (each attempt would wait for the 5 s connection timeout); network errors, timeouts and gateway errors are retried twice with backoff, and only for GET queries.
+- **Consequence:** a new PDF appears within about 30 s, a restarted database within about 10 s; previous points stay on screen while new ones load.
+
+## D18 – How dimmed points are drawn
+
+- **Context:** points outside the filters or unrelated to the selection must look smaller and more transparent, but `InstancedMesh` has no per-instance opacity.
+- **Decision:** two instanced meshes share one low-poly sphere: an opaque one for emphasized points and a transparent one (opacity 0.16, no depth writes) for dimmed points. Buffers are allocated once per dataset and rewritten in place; picking maps `instanceId` back to the point, preferring emphasized points. Points hidden in the legend are not drawn. The focus has a priority: selection and its real neighbors, then the RAG results, then the text matches.
+- **Consequence:** two draw calls for any number of points, and no custom shader to explain.
+
+## D19 – Frontend loading and rendering
+
+- **Context:** three.js is about 580 kB minified; the sidebar must stay usable even when the 3D view cannot load.
+- **Decision:** the 3D view is lazy-loaded in its own chunk behind an error boundary; frames are rendered only when the camera moves or the data changes (the animation loop only checks for changes); `<code>`/`<pre>` disable font ligatures so that `<=>` never turns into an arrow.
+- **Consequence:** fast first paint; idle laptops do not spin the GPU.
