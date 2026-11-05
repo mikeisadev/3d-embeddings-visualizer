@@ -14,7 +14,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  */
 public final class PgvectorDatabase {
 
-    public static final String IMAGE = "pgvector/pgvector:pg17";
+    /** Same pinned image as the demo database (compose.demo.yaml). */
+    public static final String IMAGE = "pgvector/pgvector:0.8.7-pg17";
 
     private static final PostgreSQLContainer CONTAINER = startContainer();
     private static final JdbcTemplate ADMIN = new JdbcTemplate(adminDataSource());

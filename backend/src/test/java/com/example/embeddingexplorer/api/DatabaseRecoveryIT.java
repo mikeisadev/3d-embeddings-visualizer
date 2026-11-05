@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.embeddingexplorer.support.PgvectorDatabase;
 import com.example.embeddingexplorer.support.SampleData;
 import com.example.embeddingexplorer.support.TestVectors;
 import com.github.dockerjava.api.model.ExposedPort;
@@ -75,7 +76,7 @@ class DatabaseRecoveryIT {
     }
 
     private static PostgreSQLContainer startDatabase() {
-        PostgreSQLContainer container = new PostgreSQLContainer("pgvector/pgvector:pg17")
+        PostgreSQLContainer container = new PostgreSQLContainer(PgvectorDatabase.IMAGE)
                 .withCreateContainerCmdModifier(command -> Objects.requireNonNull(command.getHostConfig())
                         .withPortBindings(new PortBinding(Ports.Binding.bindPort(HOST_PORT), new ExposedPort(5432))));
         container.start();

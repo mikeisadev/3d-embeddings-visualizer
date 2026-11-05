@@ -56,7 +56,7 @@ class PgvectorMissingIT {
     }
 
     private static PostgreSQLContainer startPlainPostgres() {
-        PostgreSQLContainer container = new PostgreSQLContainer("postgres:17-alpine");
+        PostgreSQLContainer container = new PostgreSQLContainer("postgres:17.11-alpine3.24");
         container.start();
         return container;
     }

@@ -4,6 +4,10 @@
  */
 import * as z from 'zod';
 
+// The Content-Security-Policy forbids eval, so zod must not even probe `new Function`. Zod
+// decides when a schema is defined, so this runs before any schema below.
+z.config({ jitless: true });
+
 const count = z.number().int().nonnegative();
 
 export const checkStatusSchema = z.enum(['OK', 'WARN', 'FAIL', 'SKIPPED']);

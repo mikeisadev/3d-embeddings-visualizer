@@ -53,13 +53,13 @@ Legend: `[x]` done, `[ ]` to do.
 
 ## M5 – Docker and docs
 
-- [ ] Backend image (multi-stage, JRE 21, non-root, healthcheck)
-- [ ] Frontend image (Node LTS build with type check + tests, unprivileged nginx, `/api/` proxy, security headers, gzip)
-- [ ] `docker-compose.yml` (hardened services, `.env`), `.env.example`, `.gitignore`
-- [ ] `compose.demo.yaml` + demo database init scripts (synthetic, seeded, normalized vectors)
-- [ ] `scripts/smoke-test.sh`
-- [ ] Docs: `README.md`, `docs/collegamento-database-vettoriale.md`, `docs/guida-didattica.md`, `docs/architecture.md`, `docs/decisions.md`
-- [ ] End-to-end check: demo stack up, smoke test green, database down → `DB_UNAVAILABLE` → recovery
+- [x] Backend image (multi-stage, JRE 21, non-root, healthcheck)
+- [x] Frontend image (Node LTS build with type check + tests, unprivileged nginx, `/api/` proxy, security headers, gzip)
+- [x] `docker-compose.yml` (hardened services, `.env`), `.env.example`, `.gitignore`
+- [x] `compose.demo.yaml` + demo database init scripts (synthetic, seeded, normalized vectors)
+- [x] `scripts/smoke-test.sh`
+- [x] Docs: `README.md`, `docs/collegamento-database-vettoriale.md`, `docs/guida-didattica.md`, `docs/architecture.md`, `docs/decisions.md`
+- [x] End-to-end check: demo stack up, smoke test green, database down → `DB_UNAVAILABLE` → recovery
 
 ## M6 – Optional features (only after M1–M5 are green)
 
@@ -103,3 +103,12 @@ Legend: `[x]` done, `[ ]` to do.
 - `POST /api/v1/search`: Spring AI's own query, `passesThreshold` per result, question projected with the same PCA, the Spring AI SQL in the response.
 - Sidebar section 7 (enabled and disabled states), "Prova il modello" in the status section, question marker with green (kept) and dashed orange (discarded) links in 3D.
 - Tests: backend 107 unit + 51 integration (fake OpenAI server over real HTTP), frontend 92; verified in Chromium with a local fake provider.
+
+### M5 – Docker and docs ✅
+
+- Backend image: Maven build stage with a cached dependency layer → JRE 21 Alpine, user 10001, `-XX:MaxRAMPercentage=75`, healthcheck on `/actuator/health`.
+- Frontend image: Node 24 LTS build stage running type check, lint and the 92 tests before the build → unprivileged nginx on 8080 with SPA fallback, `/api/` proxy (90 s, large buffers), gzip, strict CSP and security headers, backend resolved at request time.
+- `docker-compose.yml` (only the frontend published, on `127.0.0.1:8088` by default; read-only root, `tmpfs`, `cap_drop: ALL`, `no-new-privileges`, memory and pid limits, healthchecks), `compose.demo.yaml` (in-memory demo database), `compose.l17-network.yaml` (option B), `.env.example`, `scripts/smoke-test.sh`.
+- Docs: README, database connection guide and classroom guide (Italian), architecture with a deployment section, decisions D23–D27; README screenshot taken from the demo stack.
+- Verified on the Docker demo stack: smoke test green, no CSP violations in Chromium (zod set to jitless), database stopped → `DB_UNAVAILABLE` with its hint while the points stay on screen → back by itself about 10 s after the restart.
+- Tests: backend 108 unit + 51 integration (now on the pinned `pgvector/pgvector:0.8.7-pg17` and `postgres:17.11-alpine3.24`), frontend 92.
