@@ -1,0 +1,59 @@
+# Every setting comes from a VIZ_* environment variable; the value after ':' is the default.
+# The values are bound to ExplorerProperties and validated at startup.
+viz:
+  db:
+    url: ${VIZ_DB_URL:jdbc:postgresql://host.docker.internal:5432/chatbot}
+    user: ${VIZ_DB_USER:chatbot}
+    # No default on purpose: the password comes only from the environment.
+    password: ${VIZ_DB_PASSWORD:}
+    schema: ${VIZ_DB_SCHEMA:public}
+    table: ${VIZ_DB_TABLE:vector_store}
+    statement-timeout: ${VIZ_DB_STATEMENT_TIMEOUT:15s}
+    connection-timeout: ${VIZ_DB_CONNECTION_TIMEOUT:5s}
+  distance-metric: ${VIZ_DISTANCE_METRIC:auto}
+  max-points: ${VIZ_MAX_POINTS:5000}
+  snapshot-memory-budget-mb: ${VIZ_SNAPSHOT_MEMORY_BUDGET_MB:256}
+  embedding:
+    enabled: ${VIZ_EMBEDDING_ENABLED:false}
+    base-url: ${VIZ_EMBEDDING_BASE_URL:https://api.openai.com/v1}
+    model: ${VIZ_EMBEDDING_MODEL:text-embedding-3-small}
+    api-key: ${VIZ_EMBEDDING_API_KEY:}
+  search-rate-limit-per-minute: ${VIZ_SEARCH_RATE_LIMIT_PER_MINUTE:10}
+
+spring:
+  application:
+    name: embedding-explorer
+  main:
+    banner-mode: off
+  web:
+    # Technical messages (validation details) stay in English whatever the browser language.
+    locale: en
+    locale-resolver: fixed
+
+server:
+  port: 8080
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    access:
+      default: none
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      access: read-only
+      show-details: never
+  health:
+    # The database is an external dependency reported by /api/v1/diagnostics: the backend
+    # stays healthy (and the UI usable) while the database is down.
+    db:
+      enabled: false
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
